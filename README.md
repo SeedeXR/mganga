@@ -12,6 +12,8 @@ for healer, and the rule that follows from the name is the project's first law:
 
 > Website: https://seedexr.github.io/mganga/ · Built by [SeedeXR](https://github.com/SeedeXR)
 
+![The Mganga home screen: a live diagnosis naming the biggest memory holders, and the startup card naming two services that probably don't need to start with Windows](site/assets/screenshot-home.png)
+
 ## Why another "PC optimizer"?
 
 Because the category is broken. The typical tool shouts "247 issues found!",
