@@ -1,0 +1,41 @@
+# Fast checks on every PR and push to main: frontend builds, Rust tests pass.
+# The full installer build is label-gated in build-exe.yml to save minutes.
+
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> target"
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Frontend build
+        run: npm run build
+
+      # The tests are live probes by design (registry roundtrip on a dummy
+      # value, process lifecycle on a self-spawned child). GitHub's Windows
+      # runners are real Windows, so they run there too.
+      - name: Rust tests
+        run: cargo test -p mganga --lib

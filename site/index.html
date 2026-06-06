@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mganga: a Windows resource healer</title>
+  <meta name="description" content="Mganga answers two questions in plain language: why is my machine slow right now, and what starts itself with Windows? Then it heals, gently and reversibly. Open source, GPL-3.0." />
+  <link rel="icon" type="image/svg+xml" href="assets/mganga-favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@700&family=Reddit+Sans:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --ink: #0c0e12;
+      --paper: #f1ede6;
+      --flame: #f26a21;
+      --caution: #f5a623;
+      --mute: #8b9099;
+      --faint: #5a5f66;
+      --green: #16c060;
+      --red: #e5394d;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: var(--ink);
+      color: var(--paper);
+      font-family: "Reddit Sans", "Segoe UI", sans-serif;
+      line-height: 1.6;
+    }
+    h1, h2, h3 { font-family: "Bricolage Grotesque", "Segoe UI", sans-serif; letter-spacing: -0.02em; }
+    a { color: var(--flame); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .wrap { max-width: 880px; margin: 0 auto; padding: 0 24px; }
+
+    /* Hero */
+    header { padding: 96px 0 64px; text-align: center; }
+    .mark { width: 96px; height: 96px; margin: 0 auto 24px; display: block; }
+    .grooves line {
+      animation: breathe 1.5s ease-in-out infinite;
+    }
+    @keyframes breathe { 0%, 100% { opacity: 0.25; } 50% { opacity: 1; } }
+    @media (prefers-reduced-motion: reduce) {
+      .grooves line { animation: none; opacity: 0.85; }
+    }
+    .wordmark { font-size: clamp(40px, 8vw, 64px); font-weight: 700; }
+    .wordmark .dot { color: var(--flame); }
+    .tagline { font-size: clamp(18px, 3vw, 24px); color: var(--mute); margin-top: 8px; }
+    .law {
+      display: inline-block; margin-top: 28px; padding: 10px 20px;
+      border: 1px solid rgba(241, 237, 230, 0.15); border-radius: 999px;
+      color: var(--paper); font-size: 15px;
+    }
+    .cta-row { margin-top: 36px; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+    .btn {
+      display: inline-block; padding: 12px 24px; border-radius: 10px;
+      font-weight: 500; font-size: 15px; transition: opacity 0.15s;
+    }
+    .btn:hover { opacity: 0.85; text-decoration: none; }
+    .btn-flame { background: var(--flame); color: var(--ink); }
+    .btn-ghost { background: rgba(241, 237, 230, 0.1); color: var(--paper); }
+
+    /* Sections */
+    section { padding: 48px 0; }
+    section h2 { font-size: 28px; margin-bottom: 20px; }
+    .questions { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+    .q-card {
+      background: rgba(241, 237, 230, 0.05); border-radius: 16px; padding: 28px;
+    }
+    .q-card .num { color: var(--flame); font-family: "Bricolage Grotesque", sans-serif; font-weight: 700; font-size: 14px; letter-spacing: 0.1em; }
+    .q-card h3 { font-size: 22px; margin: 8px 0 10px; }
+    .q-card p { color: var(--mute); font-size: 15px; }
+
+    .vows { list-style: none; display: grid; gap: 14px; }
+    .vows li {
+      background: rgba(241, 237, 230, 0.05); border-radius: 12px; padding: 18px 22px;
+      font-size: 15px; color: var(--mute);
+    }
+    .vows li strong { color: var(--paper); display: block; margin-bottom: 4px; font-weight: 500; }
+    .vows li.green strong::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 99px; background: var(--green); margin-right: 10px; }
+    .vows li.flame strong::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 99px; background: var(--flame); margin-right: 10px; }
+    .vows li.caution strong::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 99px; background: var(--caution); margin-right: 10px; }
+    .vows li.red strong::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 99px; background: var(--red); margin-right: 10px; }
+
+    .arch {
+      background: rgba(241, 237, 230, 0.05); border-radius: 16px; padding: 28px;
+      font-size: 15px; color: var(--mute);
+    }
+    .arch code { color: var(--paper); background: rgba(241, 237, 230, 0.08); padding: 2px 6px; border-radius: 6px; font-size: 13px; }
+
+    /* Footer */
+    footer {
+      margin-top: 48px; padding: 40px 0 56px;
+      border-top: 1px solid rgba(241, 237, 230, 0.08);
+      text-align: center; color: var(--faint); font-size: 14px;
+    }
+    footer img { height: 44px; margin-bottom: 12px; opacity: 0.9; }
+    footer p + p { margin-top: 6px; }
+  </style>
+</head>
+<body>
+  <header class="wrap">
+    <!-- The cowrie mark, grooves breathing like the in-app loader -->
+    <svg class="mark" viewBox="0 0 120 120" aria-label="Mganga mark">
+      <path fill-rule="evenodd" fill="#f1ede6"
+        d="M60 26 C72 30 80 46 80 60 C80 80 70 94 60 94 C50 94 40 80 40 60 C40 46 48 30 60 26 Z M60 36 Q67 60 60 84 Q53 60 60 36 Z"/>
+      <g class="grooves" stroke="#f26a21" stroke-width="2" stroke-linecap="round">
+        <line x1="55" y1="46" x2="65" y2="46" style="animation-delay: 0ms"/>
+        <line x1="54" y1="54" x2="66" y2="54" style="animation-delay: 150ms"/>
+        <line x1="53.5" y1="62" x2="66.5" y2="62" style="animation-delay: 300ms"/>
+        <line x1="54" y1="70" x2="66" y2="70" style="animation-delay: 450ms"/>
+        <line x1="55" y1="78" x2="65" y2="78" style="animation-delay: 600ms"/>
+      </g>
+    </svg>
+    <h1 class="wordmark">mganga<span class="dot">.</span></h1>
+    <p class="tagline">A Windows resource healer</p>
+    <p class="law">A healer does not poison the patient.</p>
+    <div class="cta-row">
+      <a class="btn btn-flame" href="https://github.com/SeedeXR/mganga/releases">Download for Windows</a>
+      <a class="btn btn-ghost" href="https://github.com/SeedeXR/mganga">View source on GitHub</a>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section>
+      <h2>Two questions, answered honestly</h2>
+      <div class="questions">
+        <div class="q-card">
+          <span class="num">QUESTION 1</span>
+          <h3>Why is my machine slow right now?</h3>
+          <p>One honest sentence, updated live: how strained your processor and
+          memory are, and exactly which apps are responsible, with the numbers
+          to prove it. No mystery scores, no "247 issues found".</p>
+        </div>
+        <div class="q-card">
+          <span class="num">QUESTION 2</span>
+          <h3>What starts itself with Windows?</h3>
+          <p>Every autostart from the registry, startup folders, scheduled tasks
+          and services, each with a verdict and a reason. Backed by real
+          evidence: when you actually last opened the app.</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>How it heals</h2>
+      <ul class="vows">
+        <li class="green"><strong>Gentle first, violent last</strong>
+          The first suggestion is always Efficiency mode, the same gentle
+          throttle Windows itself uses: the app keeps working, just quietly.
+          Then pause. Stop is last, de-emphasized, and always confirmed.</li>
+        <li class="flame"><strong>Attention only where it costs you</strong>
+          The interface is calm and near-monochrome. Orange appears in exactly
+          one situation: something is costing you resources right now.</li>
+        <li class="caution"><strong>Verdicts with evidence</strong>
+          "Safe to turn off" comes with the why: what the app does, who makes
+          it, and when you last used it. When it is genuinely your call,
+          Mganga says so instead of pretending to know.</li>
+        <li class="red"><strong>Nothing is ever deleted</strong>
+          Autostart switches flip the same bytes Task Manager flips, every
+          change is recorded in an audit log, and every change has an Undo.
+          The things that keep Windows and your security running are protected
+          and untouchable.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Built not to be trusted blindly</h2>
+      <div class="arch">
+        <p>Mganga runs <strong style="color: var(--paper)">without administrator rights</strong>.
+        Machine-wide changes go through a small elevated helper
+        (<code>mganga-broker.exe</code>), started only when needed with one UAC
+        prompt, talking over a named pipe. The helper re-validates every request
+        against the same safety rules the app uses, compiled into both binaries,
+        so neither side can be talked into something the rules forbid.</p>
+        <p style="margin-top: 12px">And because trust should not require faith:
+        the entire codebase is open source under
+        <a href="https://github.com/SeedeXR/mganga/blob/main/LICENSE">GPL-3.0</a>,
+        which means every fork of Mganga must stay open source too. In a
+        category full of closed-source scareware, the license is part of the
+        safety model.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <a href="https://github.com/SeedeXR"><img src="assets/seedexr-logo.png" alt="SeedeXR" /></a>
+    <p>Mganga is built in the open by SeedeXR and contributors.</p>
+    <p><a href="https://github.com/SeedeXR/mganga">GitHub</a> ·
+       <a href="https://github.com/SeedeXR/mganga/blob/main/CONTRIBUTING.md">Contribute</a> ·
+       <a href="https://github.com/SeedeXR/mganga/releases">Releases</a></p>
+  </footer>
+</body>
+</html>
