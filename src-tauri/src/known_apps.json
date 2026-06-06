@@ -1,0 +1,273 @@
+[
+  {
+    "category": "antivirus",
+    "publisher_contains": ["avast", "avg technologies", "avira", "bitdefender", "eset", "kaspersky", "mcafee", "nortonlifelock", "gen digital", "malwarebytes", "sophos", "trend micro", "f-secure", "webroot"],
+    "verdict": "protected",
+    "reason": "This looks like your antivirus. Mganga will not touch the thing that protects you."
+  },
+  {
+    "category": "windows-security",
+    "exe": ["securityhealthsystray.exe"],
+    "name_contains": ["securityhealth"],
+    "verdict": "keep",
+    "reason": "The little shield icon that watches over Windows Security. It costs almost nothing."
+  },
+  {
+    "category": "windows-security",
+    "name_contains": ["windows defender"],
+    "verdict": "protected",
+    "reason": "Part of Windows' built-in protection. Mganga will not touch it."
+  },
+
+  {
+    "category": "updater",
+    "exe": ["googleupdate.exe", "updater.exe"],
+    "name_contains": ["googleupdatetask", "googleupdater"],
+    "publisher_contains": [],
+    "verdict": "keep",
+    "reason": "Google's updater, it keeps Chrome patched against security holes. It runs briefly and goes away."
+  },
+  {
+    "category": "updater",
+    "name_contains": ["edgeupdate", "microsoftedgeupdate"],
+    "verdict": "keep",
+    "reason": "Keeps Microsoft Edge patched against security holes. Browsers are worth keeping up to date."
+  },
+  {
+    "category": "updater",
+    "exe": ["adobearm.exe", "armsvc.exe", "adobegcclient.exe"],
+    "name_contains": ["adobe acrobat update", "adobe gc"],
+    "verdict": "safe-to-disable",
+    "reason": "Adobe's update checker. Acrobat also checks for updates when you actually open it."
+  },
+  {
+    "category": "printer-utility",
+    "publisher_contains": ["seiko epson"],
+    "name_contains": ["epson"],
+    "verdict": "safe-to-disable",
+    "reason": "This is a printer utility. It only needs to run when you actually print, scan, or update, not at every boot. If your printer acts up, turn it back on."
+  },
+  {
+    "category": "updater",
+    "exe": ["jusched.exe"],
+    "verdict": "safe-to-disable",
+    "reason": "Java's update reminder. It mostly shows popups, Java keeps working without it."
+  },
+  {
+    "category": "updater",
+    "exe": ["dropboxupdate.exe"],
+    "name_contains": ["dropboxupdate"],
+    "verdict": "safe-to-disable",
+    "reason": "Dropbox's separate update checker. Dropbox updates itself while it runs."
+  },
+
+  {
+    "category": "sync-client",
+    "exe": ["onedrive.exe"],
+    "verdict": "your-call",
+    "reason": "Syncs your OneDrive files from the moment you log in. If you do not need files synced right away, you can start it yourself when you want it."
+  },
+  {
+    "category": "sync-client",
+    "exe": ["megasync.exe"],
+    "name_contains": ["megasync"],
+    "verdict": "your-call",
+    "reason": "Syncs your MEGA cloud files at every logon. Turn it off if syncing can wait until you open MEGAsync yourself."
+  },
+  {
+    "category": "sync-client",
+    "exe": ["dropbox.exe"],
+    "verdict": "your-call",
+    "reason": "Syncs your Dropbox from the moment you log in. Off is fine if you can wait until you open it."
+  },
+  {
+    "category": "sync-client",
+    "exe": ["googledrivefs.exe"],
+    "name_contains": ["google drive"],
+    "verdict": "your-call",
+    "reason": "Keeps Google Drive synced from logon. Your files stay safe either way, this is about when syncing starts."
+  },
+
+  {
+    "category": "game-launcher",
+    "exe": ["steam.exe"],
+    "verdict": "safe-to-disable",
+    "reason": "Steam works fine when you open it yourself. Starting at boot only saves you one double click."
+  },
+  {
+    "category": "game-launcher",
+    "exe": ["epicgameslauncher.exe"],
+    "verdict": "safe-to-disable",
+    "reason": "The Epic launcher does nothing useful in the background. Open it when you want to play."
+  },
+  {
+    "category": "chat",
+    "exe": ["discord.exe"],
+    "name_contains": ["discord"],
+    "verdict": "your-call",
+    "reason": "Starts Discord with Windows so messages arrive right away. If you open it when you need it, this can be off."
+  },
+  {
+    "category": "media",
+    "exe": ["spotify.exe"],
+    "verdict": "safe-to-disable",
+    "reason": "Spotify starts quickly when you want music. It does not need to launch with Windows."
+  },
+
+  {
+    "category": "vendor-utility",
+    "name_contains": ["armoury crate", "armourycrate"],
+    "verdict": "your-call",
+    "reason": "ASUS's hub for lighting and fan profiles. Your saved settings keep applying even when it is off, you mainly need it to change them."
+  },
+  {
+    "category": "vendor-utility",
+    "publisher_contains": ["asus"],
+    "verdict": "your-call",
+    "reason": "ASUS support software. Windows runs fine without it, but things like special keyboard keys or lighting control may stop until it is back on."
+  },
+  {
+    "category": "rgb-utility",
+    "exe": ["icue.exe"],
+    "publisher_contains": ["corsair"],
+    "verdict": "your-call",
+    "reason": "Controls Corsair lighting and devices. Off is fine if you do not change those settings often."
+  },
+  {
+    "category": "rgb-utility",
+    "publisher_contains": ["razer"],
+    "verdict": "your-call",
+    "reason": "Razer's device software. Your mouse and keyboard keep working without it, custom profiles and lighting need it."
+  },
+  {
+    "category": "vendor-utility",
+    "exe": ["lghub.exe"],
+    "name_contains": ["lghub", "logitech g hub"],
+    "verdict": "your-call",
+    "reason": "Logitech's device software. Basic mouse and keyboard functions work without it, custom buttons need it."
+  },
+  {
+    "category": "audio-driver",
+    "publisher_contains": ["realtek"],
+    "verdict": "keep",
+    "reason": "This is part of how your audio works. Leaving it on is the safe choice."
+  },
+  {
+    "category": "graphics-driver",
+    "publisher_contains": ["nvidia"],
+    "verdict": "keep",
+    "reason": "Supports your NVIDIA graphics card and its control panel. Leaving it on is the safe choice."
+  },
+  {
+    "category": "audio-driver",
+    "name_contains": ["nahimic"],
+    "verdict": "your-call",
+    "reason": "An audio enhancement layer that ships with some PCs. Sound keeps working without it, just without the extra processing."
+  },
+
+  {
+    "category": "remote-access",
+    "exe": ["teamviewer.exe", "teamviewer_service.exe"],
+    "publisher_contains": ["teamviewer"],
+    "verdict": "your-call",
+    "reason": "Keeps this PC reachable from outside at any time. If you only use TeamViewer now and then, starting it when you need it is also the safer habit."
+  },
+  {
+    "category": "remote-access",
+    "exe": ["anydesk.exe"],
+    "publisher_contains": ["anydesk"],
+    "verdict": "your-call",
+    "reason": "Keeps this PC reachable from outside at any time. Start it when you actually need remote access, that is also the safer habit."
+  },
+  {
+    "category": "remote-access",
+    "exe": ["remoting_host.exe"],
+    "name_contains": ["chrome remote desktop"],
+    "verdict": "your-call",
+    "reason": "Lets you reach this PC through Chrome Remote Desktop at any time. Off means you cannot connect remotely until you turn it back on."
+  },
+
+  {
+    "category": "chat",
+    "exe": ["ms-teams.exe", "teams.exe"],
+    "verdict": "your-call",
+    "reason": "Starts Teams so meetings and pings arrive at logon. If you do not live in Teams, open it when needed."
+  },
+  {
+    "category": "chat",
+    "exe": ["slack.exe"],
+    "verdict": "your-call",
+    "reason": "Starts Slack with Windows so messages arrive right away. Off is fine if you open it yourself."
+  },
+  {
+    "category": "meetings",
+    "exe": ["zoom.exe", "zoomopener.exe"],
+    "verdict": "safe-to-disable",
+    "reason": "Zoom opens fast when you click a meeting link. It does not need to wait in the background from boot."
+  },
+  {
+    "category": "chat",
+    "exe": ["telegram.exe", "whatsapp.exe", "skype.exe"],
+    "verdict": "safe-to-disable",
+    "reason": "This chat app starts fine when you open it. It does not need to launch with Windows."
+  },
+
+  {
+    "category": "download-manager",
+    "exe": ["idman.exe"],
+    "publisher_contains": ["tonec"],
+    "verdict": "your-call",
+    "reason": "Internet Download Manager's helper, it waits in the background to catch downloads from your browser. Keep it if you use IDM daily, otherwise off is fine."
+  },
+  {
+    "category": "dev-tool",
+    "exe": ["figma_agent.exe"],
+    "name_contains": ["figmaagent", "figma agent"],
+    "verdict": "your-call",
+    "reason": "Lets the Figma website use fonts installed on this PC. Only needed while you design in a browser, if fonts go missing in Figma turn it back on."
+  },
+  {
+    "category": "dev-tool",
+    "exe": ["jetbrains-toolbox.exe"],
+    "name_contains": ["jetbrains toolbox"],
+    "verdict": "your-call",
+    "reason": "Keeps your JetBrains tools updated and ready in the tray. Your IDEs run fine without it, open Toolbox when you want updates."
+  },
+  {
+    "category": "torrent",
+    "exe": ["qbittorrent.exe", "utorrent.exe"],
+    "verdict": "safe-to-disable",
+    "reason": "Your torrent app does not need to start with Windows unless you seed around the clock."
+  },
+  {
+    "category": "phone-link",
+    "exe": ["yourphone.exe", "phonelink.exe"],
+    "verdict": "your-call",
+    "reason": "Connects your phone to this PC at logon for messages and photos. Off is fine if you rarely use Phone Link."
+  },
+
+  {
+    "category": "windows-plumbing",
+    "name_contains": ["cbdhsvc"],
+    "verdict": "keep",
+    "reason": "Runs your clipboard, including clipboard history. Windows plumbing worth leaving alone."
+  },
+  {
+    "category": "windows-plumbing",
+    "name_contains": ["wpnuserservice"],
+    "verdict": "keep",
+    "reason": "Delivers your app notifications. Windows plumbing worth leaving alone."
+  },
+  {
+    "category": "windows-plumbing",
+    "name_contains": ["cdpusersvc"],
+    "verdict": "keep",
+    "reason": "Connects your devices for features like shared clipboard and continuing tasks across PCs."
+  },
+  {
+    "category": "windows-security",
+    "name_contains": ["webthreatdefusersvc", "webthreatdefsvc"],
+    "verdict": "protected",
+    "reason": "Part of Windows' protection against dangerous websites. Mganga will not touch it."
+  }
+]

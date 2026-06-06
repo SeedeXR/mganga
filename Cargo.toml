@@ -1,0 +1,5 @@
+# Workspace root. Exists so IDEs (RustRover) detect the Rust project at the
+# top of the repository; the actual package lives in src-tauri/.
+[workspace]
+members = ["src-tauri"]
+resolver = "2"
