@@ -50,7 +50,7 @@ jobs:
         shell: pwsh
         run: |
           Copy-Item target/release/mganga-broker.exe src-tauri/mganga-broker.exe
-          Set-Content -Path src-tauri/ci-bundle.json -Encoding ascii -Value '{ "bundle": { "resources": ["mganga-broker.exe"] } }'
+          Set-Content -Path src-tauri/ci-bundle.json -Encoding ascii -Value '{ "bundle": { "targets": ["nsis"], "resources": ["mganga-broker.exe"] } }'
 
       - name: Build the app (NSIS installer)
         run: npm run tauri build -- --config src-tauri/ci-bundle.json
