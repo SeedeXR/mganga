@@ -53,6 +53,26 @@
   animation: mganga-breathe 1.5s ease-in-out infinite;
 }
 
+/* The fire badge on a strained resource icon: a small flame emoji that
+   flickers like a real one. State-driven only, never ambient. */
+@keyframes mganga-flicker {
+  0%,
+  100% {
+    transform: scale(1) rotate(-4deg);
+  }
+  35% {
+    transform: scale(1.18) rotate(3deg);
+  }
+  70% {
+    transform: scale(1.06) rotate(-1deg);
+  }
+}
+.mganga-flicker {
+  display: inline-block;
+  animation: mganga-flicker 0.7s ease-in-out infinite;
+  transform-origin: 50% 90%; /* flames sway from the base, not the center */
+}
+
 /* Reduced motion (Windows: Settings > Accessibility > Visual effects >
    Animation effects off). The orbit stops spinning; the whole shell pulses
    gently instead, all grooves together, slower and shallower. Opacity-only,
@@ -60,6 +80,9 @@
 @media (prefers-reduced-motion: reduce) {
   .mganga-orbit {
     animation: none;
+  }
+  .mganga-flicker {
+    animation: none; /* the badge still appears, it just holds still */
   }
   .mganga-breathe {
     animation: mganga-breathe-still 2.5s ease-in-out infinite;

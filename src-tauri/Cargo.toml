@@ -1,6 +1,6 @@
 [package]
 name = "mganga"
-version = "0.1.0"
+version = "0.1.1"
 description = "Mganga, a Windows resource healer"
 authors = ["you"]
 edition = "2021"

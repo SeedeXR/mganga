@@ -656,8 +656,13 @@ function RightNowView() {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <span className={`rounded-lg bg-paper/10 p-2 ${memPct >= 80 ? "text-flame" : "text-mute"}`}>
+          <span className={`relative rounded-lg bg-paper/10 p-2 ${memPct >= 80 ? "text-flame" : "text-mute"}`}>
             <RamIcon />
+            {memPct >= 80 && (
+              <span className="mganga-flicker absolute -top-2.5 -right-1.5 text-sm" aria-hidden="true">
+                🔥
+              </span>
+            )}
           </span>
           <div>
             <div className="font-display text-2xl font-bold">{memPct}%</div>
@@ -1102,8 +1107,13 @@ function HomeView({ onGo }) {
                 </div>
               </div>
               <div className="flex items-center gap-2.5">
-                <span className={`rounded-lg bg-paper/10 p-2 ${memPct >= 80 ? "text-flame" : "text-mute"}`}>
+                <span className={`relative rounded-lg bg-paper/10 p-2 ${memPct >= 80 ? "text-flame" : "text-mute"}`}>
                   <RamIcon />
+                  {memPct >= 80 && (
+                    <span className="mganga-flicker absolute -top-2.5 -right-1.5 text-sm" aria-hidden="true">
+                      🔥
+                    </span>
+                  )}
                 </span>
                 <div>
                   <div className="font-display text-xl font-bold">{memPct}%</div>
