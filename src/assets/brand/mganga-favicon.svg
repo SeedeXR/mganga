@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120" role="img" aria-label="Mganga app icon">
+  <rect x="0" y="0" width="120" height="120" rx="26" fill="#0c0e12"/>
+  <path fill-rule="evenodd" fill="#f1ede6" d="M60 28 C71 31 79 46 79 60 C79 79 70 92 60 92 C50 92 41 79 41 60 C41 46 49 31 60 28 Z M60 38 Q66 60 60 82 Q54 60 60 38 Z"/>
+  <g stroke="#f26a21" stroke-width="3.2" stroke-linecap="round">
+    <line x1="54" y1="51" x2="66" y2="51"/>
+    <line x1="53" y1="61" x2="67" y2="61"/>
+    <line x1="54" y1="71" x2="66" y2="71"/>
+  </g>
+</svg>

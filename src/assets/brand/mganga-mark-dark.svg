@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120" role="img" aria-label="Mganga cowrie mark">
+  <path fill-rule="evenodd" fill="#f1ede6" d="M60 26 C72 30 80 46 80 60 C80 80 70 94 60 94 C50 94 40 80 40 60 C40 46 48 30 60 26 Z M60 36 Q67 60 60 84 Q53 60 60 36 Z"/>
+  <g stroke="#f26a21" stroke-width="1.8" stroke-linecap="round">
+    <line x1="55" y1="46" x2="65" y2="46"/>
+    <line x1="54" y1="54" x2="66" y2="54"/>
+    <line x1="53.5" y1="62" x2="66.5" y2="62"/>
+    <line x1="54" y1="70" x2="66" y2="70"/>
+    <line x1="55" y1="78" x2="65" y2="78"/>
+  </g>
+</svg>

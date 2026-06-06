@@ -1,7 +1,18 @@
-# Mganga — build progress
+# Mganga: build progress
 
-Last updated: 2026-06-06. All 8 bricks of `mganga-docs/docs/build-plan.md` are built.
+Last updated: 2026-06-07. All 8 bricks of `mganga-docs/docs/build-plan.md` are built.
 The app runs with `npm run tauri dev` from the project root.
+
+> 2026-06-07: the brand pass (`mganga-brand/APPLY-BRAND.md` from Downloads) was applied.
+> Cowrie icon set generated into `src-tauri/icons/`, brand SVGs in `src/assets/brand/`,
+> self-hosted fonts (Bricolage Grotesque 700, Reddit Sans 400/500) via fontsource,
+> design tokens as Tailwind **v4 `@theme`** in `src/App.css` (no tailwind.config.js,
+> the brand doc's v3 snippet was adapted), and `App.jsx` re-skinned: near-monochrome
+> ink/paper, caution yellow only on "your call", `focus` purple for selected
+> tab/filter chips, flame on the live cost signal + Plumbing primaries.
+> Owner deviations from the brand doc (2026-06-07, deliberate): the throttle button
+> is **green** (Task-Manager-leaf association) and renamed **"Efficiency mode"**
+> (was "Ease off"), and the Stop button text is glitch-red (was mute).
 
 > Layout note: the project was flattened on 2026-06-06. The former `mganga/` subfolder's
 > contents now live at the root, and a workspace `Cargo.toml` at the root makes RustRover
@@ -22,10 +33,10 @@ The app runs with `npm run tauri dev` from the project root.
 
 ## Pending gates (user actions, in order of effort)
 
-1. **Brick 6, two minutes:** on the Right now tab, pick Spotify (or similar):
-   Ease off → Full speed → Pause (CPU hits 0, audio freezes) → Resume. Stop something
+1. **Brick 6, two minutes:** on the Running now tab, pick Spotify (or similar):
+   Efficiency mode → Full speed → Pause (CPU hits 0, audio freezes) → Resume. Stop something
    trivial and judge the confirm wording. Check svchost/explorer show the lock.
-2. **Brick 7, one minute:** read the diagnosis sentence at the top of Right now.
+2. **Brick 7, one minute:** read the diagnosis sentence at the top of Running now.
    Pass = it explains why the machine is slow without needing to look anything up.
 3. **Brick 4, next reboot:** Steam was toggled OFF in Mganga (2026-06-06). After reboot:
    Steam must NOT auto-start, Mganga must still show it Off, Task Manager Startup apps
@@ -41,7 +52,10 @@ Mganga Project/            <- open this folder in RustRover
 ├── Cargo.toml             <- workspace pointer (members = ["src-tauri"]) for IDE detection
 ├── mganga-docs/           <- the spec (read CLAUDE.md + docs/ before changing anything)
 ├── package.json, vite.config.js, index.html
-├── src/App.jsx            <- whole frontend (tabs: Right now / Startup / History / Plumbing)
+├── src/App.jsx            <- whole frontend (tabs: Home / Running now / Starts with Windows /
+│                             History; Home (default, added 2026-06-07) answers both questions
+│                             at a glance: diagnosis + 60s sparkline + verdict bar, hand-rolled
+│                             SVG, no chart lib. The old Plumbing dev tab was removed 2026-06-07.)
 ├── src/App.css            <- just the Tailwind import
 └── src-tauri/
     ├── tauri.conf.json        <- beforeDevCommand also builds the broker exe
@@ -83,5 +97,5 @@ Build output goes to /target at the root (workspace), not src-tauri/target.
 - Prefetch / SRUM usage enrichment via the broker (researched; links in memory notes)
 - Toggling scheduled tasks and services (read-only today, deliberately)
 - .lnk shortcut target resolution (folder items show no publisher)
-- Production bundling: broker as signed sidecar, installer, icons
-- Project is **not a git repo** yet; `git init` recommended before further work
+- Production bundling: broker as signed sidecar, installer (icons done 2026-06-07)
+- ~~Project is not a git repo yet~~: git repo initialized 2026-06-06

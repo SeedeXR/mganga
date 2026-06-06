@@ -1,1 +1,77 @@
 @import "tailwindcss";
+
+/* Mganga brand tokens (mganga-brand/APPLY-BRAND.md). Tailwind v4 is CSS-first,
+   so these live here instead of a tailwind.config.js. Semantic names: usage
+   should read as meaning, not as color. */
+@theme {
+  /* Surfaces and text */
+  --color-ink: #0c0e12; /* base surface */
+  --color-paper: #f1ede6; /* primary text/shapes on ink */
+  --color-mute: #8b9099; /* secondary text */
+  --color-faint: #5a5f66; /* dividers, faint structure */
+
+  /* Meaningful color, used sparingly */
+  --color-flame: #f26a21; /* THE accent: action, attention, "this is costing you" */
+  --color-caution: #f5a623; /* the "your call" verdict only */
+  --color-focus: #6d28d9; /* selection / focus states */
+
+  /* Glitch RGB. Owner's deviation from the brand doc (2026-06-07): green is the
+     gentle throttle action (Task-Manager-leaf association), red marks Stop/danger.
+     Blue stays unused/reserved. Never decorative. */
+  --color-glitch-green: #16c060;
+  --color-glitch-red: #e5394d;
+  --color-glitch-blue: #2196f3;
+
+  /* Fonts (self-hosted via fontsource, imported in main.jsx).
+     --font-sans is Tailwind's default body font, so Reddit Sans is the app default. */
+  --font-display: "Bricolage Grotesque", "Segoe UI", sans-serif; /* big lines, headings, wordmark */
+  --font-sans: "Reddit Sans", "Segoe UI", sans-serif; /* all dense UI text */
+  --font-flourish: "Passion Conflict", cursive; /* rare only */
+}
+
+/* The loading cowrie: a slow orbiting arc around the mark, and the shell's
+   grooves breathing in sequence. Used by the Loading component in App.jsx. */
+@keyframes mganga-orbit {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes mganga-breathe {
+  0%,
+  100% {
+    opacity: 0.15;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+.mganga-orbit {
+  animation: mganga-orbit 1.8s linear infinite;
+  transform-origin: 50% 50%;
+}
+.mganga-breathe {
+  animation: mganga-breathe 1.5s ease-in-out infinite;
+}
+
+/* Reduced motion (Windows: Settings > Accessibility > Visual effects >
+   Animation effects off). The orbit stops spinning; the whole shell pulses
+   gently instead, all grooves together, slower and shallower. Opacity-only,
+   no movement. */
+@media (prefers-reduced-motion: reduce) {
+  .mganga-orbit {
+    animation: none;
+  }
+  .mganga-breathe {
+    animation: mganga-breathe-still 2.5s ease-in-out infinite;
+    animation-delay: 0s !important; /* no stagger: the wave reads as motion */
+  }
+  @keyframes mganga-breathe-still {
+    0%,
+    100% {
+      opacity: 0.45;
+    }
+    50% {
+      opacity: 1;
+    }
+  }
+}
