@@ -55,12 +55,55 @@ jobs:
       - name: Build the app (NSIS installer)
         run: npm run tauri build -- --config src-tauri/ci-bundle.json
 
+      # ---- Code signing via SignPath Foundation (free OSS signing) ----
+      # Activates only when the repo is configured with:
+      #   variable SIGNPATH_ORGANIZATION_ID, secret SIGNPATH_API_TOKEN
+      # Until then, builds are unsigned and everything below still works.
+      # Policy: binaries are signed only from this pipeline, never locally.
+
+      - name: Stage unsigned binaries for signing
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory unsigned | Out-Null
+          Copy-Item target/release/mganga.exe unsigned/
+          Copy-Item target/release/mganga-broker.exe unsigned/
+          Copy-Item (Get-ChildItem target/release/bundle/nsis/*.exe).FullName unsigned/
+
+      - name: Upload unsigned bundle
+        id: unsigned
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-binaries
+          path: unsigned/*
+          if-no-files-found: error
+
+      - name: Sign via SignPath
+        id: sign
+        if: vars.SIGNPATH_ORGANIZATION_ID != ''
+        uses: signpath/github-action-submit-signing-request@v1.2
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: mganga
+          signing-policy-slug: release-signing
+          github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: signed
+
+      - name: Choose signed binaries when available
+        shell: pwsh
+        run: |
+          $dir = if (Test-Path signed/mganga.exe) { "signed" } else { "unsigned" }
+          "Using binaries from: $dir"
+          New-Item -ItemType Directory final | Out-Null
+          Copy-Item "$dir/*" final/
+
       - name: Assemble portable zip
         shell: pwsh
         run: |
           New-Item -ItemType Directory portable | Out-Null
-          Copy-Item target/release/mganga.exe portable/
-          Copy-Item target/release/mganga-broker.exe portable/
+          Copy-Item final/mganga.exe portable/
+          Copy-Item final/mganga-broker.exe portable/
           Copy-Item LICENSE portable/
           Compress-Archive -Path portable/* -DestinationPath mganga-portable-windows-x64.zip
 
@@ -68,7 +111,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: mganga-installer
-          path: target/release/bundle/nsis/*.exe
+          path: final/*setup.exe
           if-no-files-found: error
 
       - name: Upload portable artifact
@@ -83,5 +126,5 @@ jobs:
         with:
           draft: true
           files: |
-            target/release/bundle/nsis/*.exe
+            final/*setup.exe
             mganga-portable-windows-x64.zip

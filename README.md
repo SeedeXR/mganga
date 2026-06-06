@@ -104,6 +104,18 @@ non-negotiable safety rules.
 Vite is pinned to ^6 because the project targets Node 22.0.0, below Vite 7's
 floor. Bump Node before bumping Vite.
 
+## Code signing policy
+
+Free code signing for releases is provided by [SignPath.io](https://signpath.io),
+certificate by [SignPath Foundation](https://signpath.org) (pending approval).
+Releases are built from source on GitHub Actions (see
+`.github/workflows/build-exe.yml`) and signed only from that pipeline; no
+maintainer signs binaries locally.
+
+Privacy: Mganga does not transfer any data off your machine. It reads local
+system state (registry, processes, usage records) and writes only what you
+ask it to, plus a local audit log at `%LOCALAPPDATA%\Mganga`.
+
 ## License
 
 [GPL-3.0](LICENSE). Mganga will always be open source, and so will every fork
