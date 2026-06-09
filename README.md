@@ -112,9 +112,14 @@ Releases are built from source on GitHub Actions (see
 `.github/workflows/build-exe.yml`) and signed only from that pipeline; no
 maintainer signs binaries locally.
 
-Privacy: Mganga does not transfer any data off your machine. It reads local
-system state (registry, processes, usage records) and writes only what you
-ask it to, plus a local audit log at `%LOCALAPPDATA%\Mganga`.
+Privacy: Mganga reads local system state (registry, processes, usage records)
+and writes only what you ask it to, plus a local audit log at
+`%LOCALAPPDATA%\Mganga`. It makes one network call, and only with your consent:
+when the automatic update check is on (the default), Mganga asks GitHub Releases
+over HTTPS whether a newer version exists. That request sends no telemetry and
+no list of your installed software, only a standard download of the release
+manifest. You can turn the check off in Settings, and with it off Mganga makes
+no network calls at all.
 
 ## License
 

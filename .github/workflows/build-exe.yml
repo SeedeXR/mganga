@@ -26,6 +26,10 @@ jobs:
   windows:
     if: github.event_name != 'pull_request' || github.event.label.name == 'build-exe'
     runs-on: windows-latest
+    # Updater artifacts are produced only when the minisign key is configured.
+    # Until then, builds run exactly as before, just without latest.json.
+    env:
+      HAS_UPDATER_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -98,6 +102,41 @@ jobs:
           New-Item -ItemType Directory final | Out-Null
           Copy-Item "$dir/*" final/
 
+      # ---- Updater signature (minisign) over the FINAL installer ----
+      # Must run AFTER SignPath so the signature covers the exact bytes users
+      # download (Authenticode-signed when #4 is live, unsigned otherwise).
+      # Signing at build time would cover the wrong bytes and fail verification.
+      - name: Sign updater artifact
+        if: startsWith(github.ref, 'refs/tags/v') && env.HAS_UPDATER_KEY == 'true'
+        shell: pwsh
+        run: |
+          $setup = (Get-ChildItem final/*setup.exe).FullName
+          npm run tauri signer sign -- `
+            --private-key "$env:TAURI_SIGNING_PRIVATE_KEY" `
+            --password "$env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD" `
+            "$setup"
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
+      - name: Assemble updater manifest (latest.json)
+        if: startsWith(github.ref, 'refs/tags/v') && env.HAS_UPDATER_KEY == 'true'
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem final/*setup.exe
+          $sig = (Get-Content "$($setup.FullName).sig" -Raw).Trim()
+          $version = "${{ github.ref_name }}".TrimStart("v")
+          $url = "https://github.com/SeedeXR/mganga/releases/download/${{ github.ref_name }}/$($setup.Name)"
+          $manifest = [ordered]@{
+            version   = $version
+            pub_date  = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+            platforms = [ordered]@{
+              "windows-x86_64" = [ordered]@{ signature = $sig; url = $url }
+            }
+          }
+          $manifest | ConvertTo-Json -Depth 5 | Set-Content -Path latest.json -Encoding utf8
+          Get-Content latest.json
+
       - name: Assemble portable zip
         shell: pwsh
         run: |
@@ -120,11 +159,19 @@ jobs:
           name: mganga-portable
           path: mganga-portable-windows-x64.zip
 
-      - name: Draft release (tag builds only)
+      - name: Publish release (tag builds only)
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          draft: true
+          # Published, not draft: the updater resolves releases/latest, which
+          # ignores drafts, so a draft release is invisible to auto-update.
+          draft: false
+          # Title is just the product name and the tag, nothing else.
+          name: Mganga ${{ github.ref_name }}
+          # latest.json + .sig are present only on key-configured builds; missing
+          # files are skipped (fail_on_unmatched_files defaults to false).
           files: |
             final/*setup.exe
+            final/*setup.exe.sig
             mganga-portable-windows-x64.zip
+            latest.json

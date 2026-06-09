@@ -6,6 +6,8 @@ mod guard;
 mod judge;
 mod proc_control;
 mod processes;
+mod settings;
+mod updater;
 mod usage;
 
 use broker_client::BrokerConn;
@@ -332,6 +334,12 @@ fn undo_change(state: State<Broker>, id: String) -> Result<(), String> {
         .find(|r| r.id == id)
         .ok_or("no such change in the log".to_string())?;
 
+    // Applied updates are recorded but cannot be reversed: there is no old
+    // version to restore. The UI hides Undo for these; this is the backstop.
+    if record.action == "update" {
+        return Err("updates cannot be undone".into());
+    }
+
     let old_hex = record.old_value_hex.as_deref();
     let before_undo = match record.hive.as_str() {
         "HKCU" => actions::restore_hkcu(&record.approved_path, &record.value_name, old_hex)?,
@@ -372,13 +380,54 @@ fn undo_change(state: State<Broker>, id: String) -> Result<(), String> {
     })
 }
 
+// ---- Settings + updates ----
+
+/// Current settings, defaults if the file is missing or damaged.
+#[tauri::command]
+fn get_settings() -> settings::Settings {
+    settings::load()
+}
+
+/// Flip the background update check on or off.
+#[tauri::command]
+fn set_auto_update_check(enabled: bool) -> Result<(), String> {
+    let mut s = settings::load();
+    s.auto_update_check = enabled;
+    settings::save(&s)
+}
+
+/// The running version, for the Settings view.
+#[tauri::command]
+fn app_version(app: tauri::AppHandle) -> String {
+    app.package_info().version.to_string()
+}
+
+/// Check now, on demand (the "Check for updates" button).
+#[tauri::command]
+async fn check_for_update(app: tauri::AppHandle) -> Result<Option<updater::UpdateInfo>, String> {
+    updater::check(&app).await
+}
+
+/// Download, install, and relaunch onto the new version.
+#[tauri::command]
+async fn install_update(app: tauri::AppHandle) -> Result<(), String> {
+    updater::apply(&app).await
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(Broker(Mutex::new(None)))
         .manage(ProcState(Mutex::new(sysinfo::System::new())))
         .manage(ProcCtl::default())
+        .setup(|app| {
+            // Quiet background check for new versions, gated on the user's
+            // setting. Never blocks startup.
+            updater::spawn_background_check(app.handle().clone());
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             ping,
             broker_start,
@@ -388,7 +437,12 @@ pub fn run() {
             process_action,
             set_autostart_enabled,
             list_audit_log,
-            undo_change
+            undo_change,
+            get_settings,
+            set_auto_update_check,
+            app_version,
+            check_for_update,
+            install_update
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

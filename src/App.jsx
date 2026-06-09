@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import "./App.css";
 import lockup from "./assets/brand/mganga-lockup-dark.svg";
 
@@ -878,6 +879,7 @@ const ACTION_LABELS = {
   "suspend-process": "Paused",
   "resume-process": "Resumed",
   "kill-process": "Stopped",
+  update: "Updated Mganga",
 };
 
 function HistoryView() {
@@ -1215,8 +1217,112 @@ function HomeView({ onGo }) {
   );
 }
 
+function SettingsView() {
+  const [settings, setSettings] = useState(null);
+  const [version, setVersion] = useState("");
+  const [busy, setBusy] = useState(false);
+  // null | "checking" | "current" | { update } | { error }
+  const [checkState, setCheckState] = useState(null);
+
+  useEffect(() => {
+    (async () => {
+      setSettings(await invoke("get_settings"));
+      setVersion(await invoke("app_version"));
+    })();
+  }, []);
+
+  async function toggleAuto() {
+    const next = !settings.auto_update_check;
+    setSettings({ ...settings, auto_update_check: next }); // optimistic
+    try {
+      await invoke("set_auto_update_check", { enabled: next });
+    } catch {
+      setSettings({ ...settings, auto_update_check: !next }); // revert on failure
+    }
+  }
+
+  async function checkNow() {
+    setCheckState("checking");
+    try {
+      const update = await invoke("check_for_update");
+      setCheckState(update ? { update } : "current");
+    } catch (e) {
+      setCheckState({ error: String(e) });
+    }
+  }
+
+  async function installNow() {
+    setBusy(true);
+    try {
+      await invoke("install_update"); // relaunches on success, so never returns
+    } catch (e) {
+      setCheckState({ error: String(e) });
+      setBusy(false);
+    }
+  }
+
+  if (!settings) return <Loading label="Opening settings..." />;
+
+  return (
+    <div className="w-full max-w-2xl flex flex-col gap-5">
+      <section className="rounded-xl bg-paper/5 p-5">
+        <div className="flex items-start justify-between gap-6">
+          <div>
+            <h2 className="text-paper font-medium">Check for updates automatically</h2>
+            <p className="text-mute text-sm mt-1">
+              Mganga gets smarter every release. With this on, it quietly asks GitHub
+              now and then whether a newer version exists. It sends no telemetry and no
+              list of your software. Turn it off to stay fully offline.
+            </p>
+          </div>
+          <div className="pt-1">
+            <ToggleSwitch enabled={settings.auto_update_check} busy={false} onChange={toggleAuto} />
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-xl bg-paper/5 p-5 flex items-center justify-between gap-4">
+        <div className="text-sm">
+          <div className="text-paper">This is Mganga {version}</div>
+          {checkState === "current" && (
+            <div className="text-faint text-xs mt-1">You are on the latest version.</div>
+          )}
+          {checkState && checkState.update && (
+            <div className="text-paper text-xs mt-1">
+              Version {checkState.update.version} is ready.
+            </div>
+          )}
+          {checkState && checkState.error && (
+            <div className="text-faint text-xs mt-1">Could not check just now.</div>
+          )}
+        </div>
+        {checkState && checkState.update ? (
+          <button
+            onClick={installNow}
+            disabled={busy}
+            className="rounded-lg bg-focus text-paper hover:opacity-90 disabled:opacity-50 px-4 py-1.5 text-sm font-medium transition-opacity"
+          >
+            {busy ? "Installing..." : "Install and restart"}
+          </button>
+        ) : (
+          <button
+            onClick={checkNow}
+            disabled={checkState === "checking"}
+            className="rounded-lg bg-paper/10 hover:bg-paper/20 disabled:opacity-50 px-4 py-1.5 text-sm font-medium transition-colors"
+          >
+            {checkState === "checking" ? "Checking..." : "Check for updates"}
+          </button>
+        )}
+      </section>
+    </div>
+  );
+}
+
 function App() {
   const [tab, setTab] = useState("home");
+  // A ready-to-install update, surfaced by the background check as a calm line.
+  const [update, setUpdate] = useState(null);
+  const [installing, setInstalling] = useState(false);
   // Home can deep-link into the startup screen with a verdict filter already
   // applied ("review these"). Clicking the nav tab itself resets to "all".
   const [startupFilter, setStartupFilter] = useState("all");
@@ -1224,6 +1330,26 @@ function App() {
     if (id === "startup") setStartupFilter(filter || "all");
     setTab(id);
   };
+
+  // The background check (Rust side) emits this when a newer version is ready.
+  useEffect(() => {
+    let unlisten;
+    listen("update-available", (e) => setUpdate(e.payload)).then((fn) => {
+      unlisten = fn;
+    });
+    return () => {
+      if (unlisten) unlisten();
+    };
+  }, []);
+
+  async function installUpdate() {
+    setInstalling(true);
+    try {
+      await invoke("install_update"); // relaunches on success, so never returns
+    } catch {
+      setInstalling(false); // stay put; the Settings tab can retry/diagnose
+    }
+  }
 
   return (
     <main className="min-h-screen bg-ink text-paper flex flex-col items-center gap-6 p-8">
@@ -1235,6 +1361,7 @@ function App() {
             ["rightnow", "Running now"],
             ["startup", "Starts with Windows"],
             ["history", "History"],
+            ["settings", "Settings"],
           ].map(([id, label]) => (
             <button
               key={id}
@@ -1249,10 +1376,26 @@ function App() {
         </nav>
       </div>
 
+      {update && (
+        <div className="w-full max-w-4xl flex items-center justify-between gap-4 rounded-lg border border-focus/30 bg-focus/15 px-4 py-2.5">
+          <span className="text-sm text-paper">
+            A new version of Mganga is ready ({update.version}). It installs when you restart.
+          </span>
+          <button
+            onClick={installUpdate}
+            disabled={installing}
+            className="rounded-md bg-focus px-3 py-1.5 text-sm font-medium text-paper transition-opacity hover:opacity-90 disabled:opacity-50"
+          >
+            {installing ? "Installing..." : "Restart now"}
+          </button>
+        </div>
+      )}
+
       {tab === "home" && <HomeView onGo={go} />}
       {tab === "rightnow" && <RightNowView />}
       {tab === "startup" && <StartupView initialFilter={startupFilter} />}
       {tab === "history" && <HistoryView />}
+      {tab === "settings" && <SettingsView />}
     </main>
   );
 }
