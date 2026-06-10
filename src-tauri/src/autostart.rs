@@ -16,6 +16,7 @@
 // skipped, not fatal. All reads work unelevated; deeper reads can be routed
 // through the broker later if a locked-down machine needs it.
 
+use crate::evidence::FileEvidence;
 use serde::Serialize;
 use std::os::windows::process::CommandExt;
 use winreg::enums::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE};
@@ -51,6 +52,10 @@ pub struct AutostartEntry {
     /// Run-key entries and Startup-folder items are toggleable via
     /// StartupApproved; RunOnce, tasks, and services are not (yet).
     pub toggle: Option<ToggleInfo>,
+    /// Issue #1, Layer 1: local evidence (version-info strings, Authenticode
+    /// signer, install location) for programs Mganga does not recognize.
+    /// None until the scan fills it in.
+    pub evidence: Option<FileEvidence>,
 }
 
 #[derive(Serialize, Clone)]
@@ -89,10 +94,33 @@ pub fn scan() -> Vec<AutostartEntry> {
             entry.last_opened_days = u.last_run_days;
         }
 
-        let judgment = crate::judge::judge(entry, exe.as_deref());
+        // Issue #1: gather the cheap local evidence for every entry, and let
+        // its CompanyName stand in as the publisher (where the value used to
+        // come from). The judge gets the evidence so unknown verdicts can be
+        // specific instead of generic.
+        let mut ev = exe.as_deref().map(crate::evidence::cheap).unwrap_or_default();
+        entry.publisher = ev.company.clone();
+
+        let judgment = crate::judge::judge(entry, exe.as_deref(), Some(&ev));
         entry.verdict = judgment.verdict;
         entry.reason = judgment.reason;
         entry.category = judgment.category;
+
+        // Only for the programs Mganga could not place: pull the Authenticode
+        // signature (the expensive signal). It is stored as evidence and shown
+        // as a calm line in the UI; per the agreed policy it never changes the
+        // verdict, only adds honest context.
+        if wants_signature(&entry.category) {
+            if let Some(p) = exe.as_deref() {
+                if std::path::Path::new(p).exists() {
+                    let (signer, valid) = crate::evidence::authenticode(p);
+                    ev.signer = signer;
+                    ev.signature_valid = valid;
+                    ev.checked_signature = true;
+                }
+            }
+        }
+        entry.evidence = Some(ev);
     }
 
     let kind_order = |k: &str| match k {
@@ -158,7 +186,7 @@ fn scan_run_keys(out: &mut Vec<AutostartEntry>) {
                 None => (true, None), // RunOnce has no on/off state
             };
             out.push(AutostartEntry {
-                publisher: extract_exe(&command).and_then(|p| file_publisher(&p)),
+                publisher: None, // filled from evidence in the scan() enrichment loop
                 name,
                 source: label.to_string(),
                 source_detail: format!("{hive_label}\\{path}"),
@@ -273,7 +301,7 @@ fn scan_scheduled_tasks(out: &mut Vec<AutostartEntry>) {
         let name = task_name.rsplit('\\').next().unwrap_or(task_name).to_string();
 
         out.push(AutostartEntry {
-            publisher: extract_exe(&command).and_then(|p| file_publisher(&p)),
+            publisher: None, // filled from evidence in the scan() enrichment loop
             name,
             source: "Scheduled task (at logon)".to_string(),
             source_detail: task_name.to_string(),
@@ -321,7 +349,7 @@ fn scan_services(out: &mut Vec<AutostartEntry>) {
         let command: String = key.get_value("ImagePath").unwrap_or_default();
 
         out.push(AutostartEntry {
-            publisher: extract_exe(&command).and_then(|p| file_publisher(&p)),
+            publisher: None, // filled from evidence in the scan() enrichment loop
             name,
             source: if delayed == 1 {
                 "Service (automatic, delayed)".to_string()
@@ -403,67 +431,14 @@ mod tests {
     }
 }
 
-/// CompanyName from the file's version resource, if it has one.
-fn file_publisher(exe_path: &str) -> Option<String> {
-    use windows::core::HSTRING;
-    use windows::Win32::Storage::FileSystem::{
-        GetFileVersionInfoSizeW, GetFileVersionInfoW, VerQueryValueW,
-    };
-
-    if !std::path::Path::new(exe_path).exists() {
-        return None;
-    }
-    unsafe {
-        let h = HSTRING::from(exe_path);
-        let size = GetFileVersionInfoSizeW(&h, None);
-        if size == 0 {
-            return None;
-        }
-        let mut data = vec![0u8; size as usize];
-        if GetFileVersionInfoW(&h, None, size, data.as_mut_ptr() as *mut _).is_err() {
-            return None;
-        }
-
-        // Find the first language/codepage pair, then ask for its CompanyName.
-        let mut ptr: *mut core::ffi::c_void = std::ptr::null_mut();
-        let mut len = 0u32;
-        if !VerQueryValueW(
-            data.as_ptr() as *const _,
-            &HSTRING::from(r"\VarFileInfo\Translation"),
-            &mut ptr,
-            &mut len,
-        )
-        .as_bool()
-            || len < 4
-        {
-            return None;
-        }
-        let lang = *(ptr as *const u16);
-        let codepage = *(ptr as *const u16).add(1);
-
-        let query = format!(r"\StringFileInfo\{lang:04x}{codepage:04x}\CompanyName");
-        let mut sptr: *mut core::ffi::c_void = std::ptr::null_mut();
-        let mut slen = 0u32;
-        if !VerQueryValueW(
-            data.as_ptr() as *const _,
-            &HSTRING::from(query.as_str()),
-            &mut sptr,
-            &mut slen,
-        )
-        .as_bool()
-            || slen == 0
-        {
-            return None;
-        }
-        let wide = std::slice::from_raw_parts(sptr as *const u16, slen as usize);
-        let s = String::from_utf16_lossy(wide)
-            .trim_end_matches('\0')
-            .trim()
-            .to_string();
-        if s.is_empty() {
-            None
-        } else {
-            Some(s)
-        }
-    }
+/// Programs Mganga could not place from its rules. These are the only entries
+/// worth paying for an Authenticode signature read on (issue #1, Layer 1).
+fn wants_signature(category: &Option<String>) -> bool {
+    matches!(
+        category.as_deref(),
+        Some("unknown")
+            | Some("suspicious-path")
+            | Some("third-party-service")
+            | Some("third-party-task")
+    )
 }
