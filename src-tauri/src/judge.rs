@@ -14,6 +14,7 @@
 // knowing.
 
 use crate::autostart::AutostartEntry;
+use crate::evidence::FileEvidence;
 use serde::Deserialize;
 use std::sync::OnceLock;
 
@@ -61,7 +62,11 @@ pub struct Judgment {
     pub category: Option<String>,
 }
 
-pub fn judge(entry: &AutostartEntry, exe_path: Option<&str>) -> Judgment {
+pub fn judge(
+    entry: &AutostartEntry,
+    exe_path: Option<&str>,
+    evidence: Option<&FileEvidence>,
+) -> Judgment {
     let name = entry.name.to_lowercase();
     let publisher = entry.publisher.as_deref().unwrap_or("").to_lowercase();
     let exe_name = exe_path
@@ -108,7 +113,7 @@ pub fn judge(entry: &AutostartEntry, exe_path: Option<&str>) -> Judgment {
             reason: rule.reason.clone(),
             category: Some(rule.category.clone()),
         },
-        None => heuristic(entry, exe_path, &publisher),
+        None => heuristic(entry, exe_path, &publisher, evidence),
     };
 
     // 4. Usage evidence (UserAssist). Sharpen the verdict, never override
@@ -257,15 +262,30 @@ fn humanize_days(days: u32) -> String {
     }
 }
 
-fn heuristic(entry: &AutostartEntry, exe_path: Option<&str>, publisher: &str) -> Judgment {
+fn heuristic(
+    entry: &AutostartEntry,
+    exe_path: Option<&str>,
+    publisher: &str,
+    evidence: Option<&FileEvidence>,
+) -> Judgment {
     let is_microsoft = publisher.contains("microsoft");
     let path_lower = exe_path.unwrap_or("").to_lowercase();
+
+    // A program's own FileDescription is often the clearest hint about what it
+    // is. Fold it into any unknown verdict where Windows recorded one, so the
+    // text is specific instead of generic.
+    let describe = |reason: String| -> String {
+        match evidence.and_then(|e| e.description.as_deref()) {
+            Some(d) => format!("{reason} It describes itself as \"{d}\"."),
+            None => reason,
+        }
+    };
 
     // Things launching from temp folders deserve a hard look.
     if path_lower.contains(r"\temp\") || path_lower.contains(r"\tmp\") {
         return Judgment {
             verdict: "your-call".into(),
-            reason: "This starts from a temporary folder, which honest apps rarely do. If the name means nothing to you, turning it off is reasonable.".into(),
+            reason: describe("This starts from a temporary folder, which honest apps rarely do. If the name means nothing to you, turning it off is reasonable.".into()),
             category: Some("suspicious-path".into()),
         };
     }
@@ -290,7 +310,7 @@ fn heuristic(entry: &AutostartEntry, exe_path: Option<&str>, publisher: &str) ->
             } else {
                 Judgment {
                     verdict: "your-call".into(),
-                    reason: "A background service installed by one of your apps. Mganga does not know it, so be careful: if that app misbehaves after you stop this, it needed it.".into(),
+                    reason: describe("A background service installed by one of your apps. Mganga does not know it, so be careful: if that app misbehaves after you stop this, it needed it.".into()),
                     category: Some("third-party-service".into()),
                 }
             }
@@ -305,7 +325,7 @@ fn heuristic(entry: &AutostartEntry, exe_path: Option<&str>, publisher: &str) ->
             } else {
                 Judgment {
                     verdict: "your-call".into(),
-                    reason: "One of your apps scheduled this to run at logon, usually for updates or telemetry. The app itself keeps working without it.".into(),
+                    reason: describe("One of your apps scheduled this to run at logon, usually for updates or telemetry. The app itself keeps working without it.".into()),
                     category: Some("third-party-task".into()),
                 }
             }
@@ -314,13 +334,13 @@ fn heuristic(entry: &AutostartEntry, exe_path: Option<&str>, publisher: &str) ->
             if publisher.is_empty() {
                 Judgment {
                     verdict: "your-call".into(),
-                    reason: "It does not say who made it. If the name means nothing to you, try turning it off, you can always turn it back on.".into(),
+                    reason: describe("It does not say who made it. If the name means nothing to you, try turning it off, you can always turn it back on.".into()),
                     category: Some("unknown".into()),
                 }
             } else {
                 Judgment {
                     verdict: "your-call".into(),
-                    reason: "Mganga does not know this app. It starts with Windows, but most apps work just as well started by hand.".into(),
+                    reason: describe("Mganga does not know this app. It starts with Windows, but most apps work just as well started by hand.".into()),
                     category: Some("unknown".into()),
                 }
             }

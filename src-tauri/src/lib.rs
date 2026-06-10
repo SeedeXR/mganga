@@ -2,6 +2,7 @@ mod actions;
 mod audit;
 mod autostart;
 mod broker_client;
+mod evidence;
 mod guard;
 mod judge;
 mod proc_control;

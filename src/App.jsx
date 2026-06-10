@@ -61,6 +61,34 @@ const VERDICTS = {
   protected: { label: "\u{1F512} Protected", cls: "bg-paper/5 text-faint" },
 };
 
+// Categories the judge could not place. Only these entries show the Layer 1
+// evidence block (signer, location), so known apps stay uncluttered.
+const UNPLACED = new Set([
+  "unknown",
+  "suspicious-path",
+  "third-party-service",
+  "third-party-task",
+]);
+
+function EvidenceLines({ e }) {
+  if (!UNPLACED.has(e.category)) return null;
+  const ev = e.evidence || {};
+  return (
+    <div className="mt-1 space-y-0.5">
+      {ev.signer ? (
+        <div className={`text-xs ${ev.signature_valid ? "text-faint" : "text-caution"}`}>
+          {ev.signature_valid
+            ? `Signed by ${ev.signer}, signature valid`
+            : `Signs as ${ev.signer}, but Windows could not verify it`}
+        </div>
+      ) : ev.checked_signature ? (
+        <div className="text-xs text-faint">Not digitally signed</div>
+      ) : null}
+      {ev.location && <div className="text-xs text-faint">Located {ev.location}</div>}
+    </div>
+  );
+}
+
 function VerdictTag({ verdict }) {
   const v = VERDICTS[verdict] || VERDICTS["your-call"];
   return (
@@ -262,6 +290,7 @@ function StartupView({ initialFilter = "all" }) {
                         {e.publisher || "Unknown publisher"}
                       </div>
                       <div className="text-xs text-mute mt-1 max-w-xl">{e.reason}</div>
+                      <EvidenceLines e={e} />
                       {e.last_opened_days != null && (
                         <div className="text-xs text-faint mt-0.5">
                           You last opened this {humanDays(e.last_opened_days)}
