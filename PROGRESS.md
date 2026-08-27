@@ -1,6 +1,7 @@
 # Mganga: build progress
 
-Last updated: 2026-06-07. All 8 bricks of `mganga-docs/docs/build-plan.md` are built.
+Last updated: 2026-08-27. All 8 bricks of `mganga-docs/docs/build-plan.md` are built,
+plus brick 8a of the connection shield (`mganga-docs/docs/brick-8-connection-shield.md`).
 The app runs with `npm run tauri dev` from the project root.
 
 > 2026-06-07: the brand pass (`mganga-brand/APPLY-BRAND.md` from Downloads) was applied.
@@ -30,6 +31,9 @@ The app runs with `npm run tauri dev` from the project root.
 | 5 | Live process view: 2s polling, grouped by exe, Task-Manager-compatible numbers | Done, memory % matched WMI exactly |
 | 6 | Process control: Ease off (EcoQoS+idle), Pause/Resume (NtSuspendProcess), Stop (confirm) | Built, lifecycle tests pass. **GATE PENDING: Spotify loop** (see below) |
 | 7 | Polish: diagnosis sentence, verdict filters, jargon hover-explainers, process verdicts | Built. **GATE PENDING: "does it explain the slowness" read** |
+| 8a | Connection shield, read-only: `shield.rs` service query + Home card (GoodbyeDPI) | Built 2026-08-27, verified vs `sc query`/`sc qc`. **GATE PENDING: card-vs-reality look** |
+| 8b | Shield toggle via broker (first service write, `ALLOWED_SERVICES` whitelist) | Not started, waits on 8a gate |
+| 8c | Reachability probe | Owner decision 2026-08-27: no network without asking per use; only if ever wanted |
 
 ## Pending gates (user actions, in order of effort)
 
@@ -41,6 +45,10 @@ The app runs with `npm run tauri dev` from the project root.
 3. **Brick 4, next reboot:** Steam was toggled OFF in Mganga (2026-06-06). After reboot:
    Steam must NOT auto-start, Mganga must still show it Off, Task Manager Startup apps
    must agree. Then flip it back on, and try History → Undo on one change.
+4. **Brick 8a, one minute:** open Home, check the Connection card matches `sc query
+   GoodbyeDPI`. Stop the service by hand (`sc stop GoodbyeDPI` as admin), reopen Home,
+   the card must say the shield is off. Start it again. Note: the card renders nothing
+   when the service is absent (deliberate deviation from the spec, public app).
 
 ## Where everything lives
 
@@ -68,6 +76,7 @@ Mganga Project/            <- open this folder in RustRover
     ├── src/autostart.rs       <- Brick 2 scanner + toggle coordinates
     ├── src/judge.rs           <- verdicts: autostart (judge) + process (judge_process)
     ├── src/known_apps.json    <- the editable rules data (category -> verdict+reason)
+    ├── src/shield.rs          <- Brick 8a: GoodbyeDPI service status (read-only, unelevated)
     ├── src/usage.rs           <- UserAssist reader (last-opened evidence)
     ├── src/processes.rs       <- live snapshot, grouped + summed
     ├── src/actions.rs         <- HKCU StartupApproved writes (+ roundtrip tests)
