@@ -1043,6 +1043,64 @@ const BAR_COLORS = {
 
 // The landing screen: Mganga's two questions answered at a glance, each card
 // a door into the full screen. Charts stay small; the sentences carry it.
+// Brick 8a: the connection shield card, read-only. Renders nothing when the
+// GoodbyeDPI service is not installed, so machines without a shield never see
+// a Discord card. Spec: mganga-docs/docs/brick-8-connection-shield.md
+function ShieldCard({ onGo }) {
+  const [status, setStatus] = useState(null);
+
+  useEffect(() => {
+    // Errors also render nothing: Home stays calm, same rule as the poller.
+    invoke("get_shield_status").then(setStatus, () => setStatus(null));
+  }, []);
+
+  if (!status || !status.installed) return null;
+
+  const headline = !status.running
+    ? "Discord shield is off"
+    : status.start_type === "auto"
+      ? "Discord shield is on"
+      : "Shield is on, but not at startup";
+  const reason = !status.running
+    ? "Discord will not load until you turn this back on."
+    : status.start_type === "auto"
+      ? "Your provider blocks Discord by name. This splits the connection setup so the block cannot read it. Only Discord traffic is touched."
+      : "It is running now, but it will not come back after you restart.";
+
+  return (
+    <section className="rounded-xl bg-paper/5 p-5 flex flex-col gap-3 md:col-span-2">
+      <h2 className="text-xs font-medium text-mute uppercase tracking-wide">Connection</h2>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-sm text-paper">{headline}</p>
+          <p className="text-xs text-mute mt-1 max-w-prose">{reason}</p>
+        </div>
+        <StatePill enabled={status.running} />
+      </div>
+      <div className="flex gap-4 flex-wrap text-xs text-mute">
+        <span>
+          Starts with Windows:{" "}
+          <span className="text-paper">{status.start_type === "auto" ? "yes" : "no"}</span>
+        </span>
+        {status.config && (
+          <span
+            className="cursor-help truncate max-w-md"
+            title="The exact command the service runs. The domain list file is the scope: only those names are touched."
+          >
+            <span className="font-mono text-faint">{status.config}</span>
+          </span>
+        )}
+      </div>
+      <button
+        onClick={() => onGo("startup")}
+        className="self-start rounded-lg bg-paper/10 hover:bg-paper/20 px-4 py-2 text-sm font-medium transition-colors"
+      >
+        See it in startup →
+      </button>
+    </section>
+  );
+}
+
 function HomeView({ onGo }) {
   const [snap, setSnap] = useState(null);
   const [samples, setSamples] = useState([]);
@@ -1242,6 +1300,8 @@ function HomeView({ onGo }) {
               : `Review these ${suggestions.length} →`}
         </button>
       </section>
+
+      <ShieldCard onGo={onGo} />
     </div>
   );
 }

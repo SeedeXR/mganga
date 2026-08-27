@@ -8,6 +8,7 @@ mod judge;
 mod proc_control;
 mod processes;
 mod settings;
+mod shield;
 mod updater;
 mod usage;
 
@@ -381,6 +382,14 @@ fn undo_change(state: State<Broker>, id: String) -> Result<(), String> {
     })
 }
 
+// ---- Connection shield (brick 8a) ----
+
+/// State of the Discord shield service. Read-only, unelevated, no broker.
+#[tauri::command]
+fn get_shield_status() -> Result<shield::ShieldStatus, String> {
+    shield::status()
+}
+
 // ---- Settings + updates ----
 
 /// Current settings, defaults if the file is missing or damaged.
@@ -439,6 +448,7 @@ pub fn run() {
             set_autostart_enabled,
             list_audit_log,
             undo_change,
+            get_shield_status,
             get_settings,
             set_auto_update_check,
             app_version,
