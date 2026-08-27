@@ -269,5 +269,12 @@
     "name_contains": ["webthreatdefusersvc", "webthreatdefsvc"],
     "verdict": "protected",
     "reason": "Part of Windows' protection against dangerous websites. Mganga will not touch it."
+  },
+  {
+    "category": "connection",
+    "exe": ["goodbyedpi.exe"],
+    "name_contains": ["goodbyedpi"],
+    "verdict": "keep",
+    "reason": "This is what makes Discord load on this connection. Your provider blocks Discord by name, and this splits the connection setup so the block cannot read it. Turn it off and Discord stops working."
   }
 ]
