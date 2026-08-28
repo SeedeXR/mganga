@@ -31,7 +31,7 @@ The app runs with `npm run tauri dev` from the project root.
 | 5 | Live process view: 2s polling, grouped by exe, Task-Manager-compatible numbers | Done, memory % matched WMI exactly |
 | 6 | Process control: Ease off (EcoQoS+idle), Pause/Resume (NtSuspendProcess), Stop (confirm) | Built, lifecycle tests pass. **GATE PENDING: Spotify loop** (see below) |
 | 7 | Polish: diagnosis sentence, verdict filters, jargon hover-explainers, process verdicts | Built. **GATE PENDING: "does it explain the slowness" read** |
-| 8a | Connection shield, read-only: `shield.rs` service query + Home card (GoodbyeDPI) | Built 2026-08-27, verified vs `sc query`/`sc qc`. **GATE PENDING: card-vs-reality look** |
+| 8a | Connection unblocker, read-only: `unblock.rs` service query + Home card (GoodbyeDPI) | Built 2026-08-27, verified vs `sc query`/`sc qc`. **GATE PENDING: card-vs-reality look** |
 | 8b | Shield toggle via broker (first service write, `ALLOWED_SERVICES` whitelist) | Not started, waits on 8a gate |
 | 8c | Reachability probe | Owner decision 2026-08-27: no network without asking per use; only if ever wanted |
 
@@ -46,9 +46,10 @@ The app runs with `npm run tauri dev` from the project root.
    Steam must NOT auto-start, Mganga must still show it Off, Task Manager Startup apps
    must agree. Then flip it back on, and try History → Undo on one change.
 4. **Brick 8a, one minute:** open Home, check the Connection card matches `sc query
-   GoodbyeDPI`. Stop the service by hand (`sc stop GoodbyeDPI` as admin), reopen Home,
-   the card must say the shield is off. Start it again. Note: the card renders nothing
-   when the service is absent (deliberate deviation from the spec, public app).
+   GoodbyeDPI`. Stop the service by hand (`sc stop GoodbyeDPI` as admin), switch tabs and
+   back, the card must say the unblocker is off. Start it again. Note: the card renders
+   nothing when the service is absent (deliberate deviation from the spec, public app),
+   and `UNBLOCK_LIMIT` in `App.jsx` is a TODO awaiting the owner's own wording.
 
 ## Where everything lives
 
@@ -76,7 +77,8 @@ Mganga Project/            <- open this folder in RustRover
     ├── src/autostart.rs       <- Brick 2 scanner + toggle coordinates
     ├── src/judge.rs           <- verdicts: autostart (judge) + process (judge_process)
     ├── src/known_apps.json    <- the editable rules data (category -> verdict+reason)
-    ├── src/shield.rs          <- Brick 8a: GoodbyeDPI service status (read-only, unelevated)
+    ├── src/unblock.rs         <- Brick 8a: connection-unblocker service status (read-only,
+    │                             unelevated); sites read from the service's own blacklist file
     ├── src/usage.rs           <- UserAssist reader (last-opened evidence)
     ├── src/processes.rs       <- live snapshot, grouped + summed
     ├── src/actions.rs         <- HKCU StartupApproved writes (+ roundtrip tests)

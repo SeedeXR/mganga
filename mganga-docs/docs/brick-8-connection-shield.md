@@ -11,6 +11,17 @@ unblock work. Follows the house rule: explain the logic first, get a thumbs up, 
 >   a feature genuinely needs one. The Phase 2 probe, if built, asks per use instead of
 >   being an always-on background setting.
 > - The zero-code `known_apps.json` entry below was applied the same day.
+> - **Not a Discord feature (2026-08-27).** Mganga ships to strangers, so no
+>   user-facing string names a particular site. The card is a *connection
+>   unblocker*, and the sites it lists are read from the service's own blacklist
+>   file on that machine. Everything below that says "Discord" is the original
+>   framing, kept for the reasoning; the built copy is generic.
+>   Two rules came out of this and hold for the rest of the brick:
+>   **(1)** Mganga explains a tool it finds, it never suggests installing one.
+>   That is why the card renders nothing when no such service exists.
+>   **(2)** Claim scope only from what was actually read. With no blacklist file
+>   we say nothing about what is covered, because we cannot verify it from here.
+>   `shield.rs` was renamed `unblock.rs` and `ShieldStatus` to `UnblockStatus`.
 
 ## What this is
 
