@@ -76,7 +76,13 @@ fn broker_read_hklm(state: State<Broker>, path: String, name: String) -> Result<
 }
 
 /// Brick 2: the full read-only autostart inventory.
-#[tauri::command]
+///
+/// `(async)` is load-bearing, not decoration. A plain sync command runs on the
+/// main thread and blocks it, and this scan takes seconds: it shells out to
+/// schtasks and reads Authenticode signatures. That froze the window on every
+/// visit to Home. This form keeps the function sync but runs it on the
+/// threadpool, so the UI stays alive while it works.
+#[tauri::command(async)]
 fn scan_autostarts() -> Vec<autostart::AutostartEntry> {
     autostart::scan()
 }

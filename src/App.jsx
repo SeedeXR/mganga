@@ -1,8 +1,47 @@
 import { useEffect, useRef, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke as tauriInvoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import "./App.css";
 import lockup from "./assets/brand/mganga-lockup-dark.svg";
+
+// ---- Dev instrumentation ----
+// Every backend call is timed and kept here so the Dev tab can show what is
+// slow and what failed. Vite compiles import.meta.env.DEV to false in real
+// builds, so the branch and the tab drop out of what ships.
+const DEV = import.meta.env.DEV;
+const DEV_MAX_CALLS = 200;
+const devCalls = [];
+
+async function invoke(cmd, args) {
+  if (!DEV) return tauriInvoke(cmd, args);
+  const started = performance.now();
+  try {
+    const out = await tauriInvoke(cmd, args);
+    devCalls.push({ cmd, ms: performance.now() - started, ok: true, at: Date.now() });
+    return out;
+  } catch (e) {
+    devCalls.push({ cmd, ms: performance.now() - started, ok: false, err: String(e), at: Date.now() });
+    throw e;
+  } finally {
+    if (devCalls.length > DEV_MAX_CALLS) devCalls.splice(0, devCalls.length - DEV_MAX_CALLS);
+  }
+}
+
+// The autostart scan takes about five seconds: it shells out to schtasks and
+// reads Authenticode signatures. Re-running it on every visit to a tab is what
+// made the window stop responding. One cached result serves both screens that
+// need it, and any change to an entry throws it away.
+const SCAN_TTL_MS = 60_000;
+let scanCache = null; // { at, entries }
+
+async function scanAutostarts(force = false) {
+  if (!force && scanCache && Date.now() - scanCache.at < SCAN_TTL_MS) {
+    return scanCache.entries;
+  }
+  const entries = await invoke("scan_autostarts");
+  scanCache = { at: Date.now(), entries };
+  return entries;
+}
 
 // The Rust side returns short error codes. This is where they become human.
 // Per the UI guide: friendly, direct, say the why, no jargon.
@@ -140,10 +179,10 @@ function StartupView({ initialFilter = "all" }) {
   const [busy, setBusy] = useState(false);
   const [vFilter, setVFilter] = useState(initialFilter);
 
-  async function refresh() {
+  async function refresh(force = false) {
     setError("");
     try {
-      setEntries(await invoke("scan_autostarts"));
+      setEntries(await scanAutostarts(force));
     } catch (e) {
       setError(String(e));
     }
@@ -168,6 +207,7 @@ function StartupView({ initialFilter = "all" }) {
         prev.map((x) => (x === entry || (x.toggle === entry.toggle && x.name === entry.name) ? { ...x, enabled: on } : x))
       );
     flip(!entry.enabled);
+    scanCache = null; // the inventory just changed, do not serve a stale copy
     try {
       await invoke("set_autostart_enabled", args);
     } catch (e) {
@@ -1049,22 +1089,21 @@ const BAR_COLORS = {
 const UNBLOCK_LIMIT =
   "This only gets past one kind of block, where your provider reads the site name as the connection opens. A site blocked by address, or by the site itself, will not be helped by this.";
 
-// Brick 8a: the connection unblocker card, read-only. Renders nothing when no
-// such service is installed, so people who have never needed one never see it,
-// and Mganga never suggests installing one.
+// Brick 8a: the connection screen, read-only. Its tab only exists when such a
+// service is installed, so people who have never needed one never see it, and
+// Mganga never suggests installing one.
 //
 // Nothing here names a particular site. The sites come from the service's own
 // list on this machine, so whoever is unblocking Telegram sees Telegram.
 // Spec: mganga-docs/docs/brick-8-connection-shield.md
-function UnblockCard({ onGo }) {
-  const [status, setStatus] = useState(null);
-
+function ConnectionView({ status, onRefresh, onGo }) {
+  // Re-read on arrival: the service can be stopped or started from outside.
   useEffect(() => {
-    // Errors also render nothing: Home stays calm, same rule as the poller.
-    invoke("get_unblock_status").then(setStatus, () => setStatus(null));
+    onRefresh();
   }, []);
 
-  if (!status || !status.installed) return null;
+  if (!status) return <Loading label="Checking your connection tools..." />;
+  if (!status.installed) return null;
 
   const headline = !status.running
     ? "Connection unblocker is off"
@@ -1077,50 +1116,190 @@ function UnblockCard({ onGo }) {
       ? "Your provider blocks some sites by reading their name as the connection opens. This splits that first message so the name cannot be read. Only the sites on your list are affected, everything else goes out untouched."
       : "It is running now, but it will not come back after you restart.";
 
-  // Scope is claimed only when the list was actually read. No list, no claim.
-  const shown = status.domains.slice(0, 2).join(", ");
-  const rest = status.domain_count - Math.min(2, status.domains.length);
+  return (
+    <div className="w-full max-w-4xl flex flex-col gap-4">
+      <section className="rounded-xl bg-paper/5 p-5 flex flex-col gap-4">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="font-display text-xl font-bold">{headline}</h2>
+            <p className="text-sm text-mute mt-1.5 max-w-prose">{reason}</p>
+          </div>
+          <StatePill enabled={status.running} />
+        </div>
+
+        {/* Scope is claimed only when the list was actually read. */}
+        {status.domain_count > 0 && (
+          <div>
+            <p className="text-xs font-medium text-mute uppercase tracking-wide">
+              Sites getting through ({status.domain_count})
+            </p>
+            <ul className="flex flex-wrap gap-1.5 mt-2">
+              {status.domains.map((d) => (
+                <li
+                  key={d}
+                  className="rounded-md bg-paper/10 px-2 py-1 font-mono text-xs text-paper"
+                >
+                  {d}
+                </li>
+              ))}
+            </ul>
+            {status.domain_count > status.domains.length && (
+              <p className="text-xs text-faint mt-1.5">
+                and {status.domain_count - status.domains.length} more on the list
+              </p>
+            )}
+          </div>
+        )}
+
+        <div className="flex gap-6 flex-wrap text-xs text-mute">
+          <span>
+            Starts with Windows:{" "}
+            <span className="text-paper">{status.start_type === "auto" ? "yes" : "no"}</span>
+          </span>
+          <span>
+            Windows service: <span className="text-paper">GoodbyeDPI</span>
+          </span>
+        </div>
+      </section>
+
+      <section className="rounded-xl bg-paper/5 p-5 flex flex-col gap-3">
+        <h2 className="text-xs font-medium text-mute uppercase tracking-wide">How this works</h2>
+        <p className="text-sm text-mute max-w-prose">
+          The tool doing this is <span className="text-paper">GoodbyeDPI</span>, a free open
+          source program running as a Windows service. When your computer opens a secure
+          connection, it has to send the site name in the clear before the encryption starts.
+          Your provider reads the name at that moment and drops the connection.
+        </p>
+        <p className="text-sm text-mute max-w-prose">
+          GoodbyeDPI splits that first message into pieces, so the name is never sitting there
+          in one readable chunk. The site you are visiting reassembles it normally and never
+          notices. Your traffic still goes straight to the site, so nothing is rerouted through
+          another country and there is no speed cost. This is not a VPN.
+        </p>
+        <div>
+          <p className="text-xs font-medium text-mute uppercase tracking-wide">
+            What this cannot do
+          </p>
+          <p className="text-sm text-mute mt-1.5 max-w-prose">{UNBLOCK_LIMIT}</p>
+        </div>
+        {status.config && (
+          <div>
+            <p className="text-xs font-medium text-mute uppercase tracking-wide">
+              The exact command Windows runs
+            </p>
+            <p className="font-mono text-[11px] text-faint mt-1.5 break-all">{status.config}</p>
+          </div>
+        )}
+        <button
+          onClick={() => onGo("startup")}
+          className="self-start rounded-lg bg-paper/10 hover:bg-paper/20 px-4 py-2 text-sm font-medium transition-colors"
+        >
+          See it in startup →
+        </button>
+      </section>
+    </div>
+  );
+}
+
+// Dev builds only: what the frontend asked the backend, and how long each call
+// took. This is the probe that found the five second autostart scan freezing
+// the window, so it stays.
+function DevView() {
+  const [calls, setCalls] = useState([]);
+
+  useEffect(() => {
+    const tick = () => setCalls(devCalls.slice(-60).reverse());
+    tick();
+    const t = setInterval(tick, 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  // Per command: how many, how slow at worst. The worst case is what the user
+  // actually feels, so it leads.
+  const byCmd = {};
+  for (const c of devCalls) {
+    const s = (byCmd[c.cmd] ||= { n: 0, worst: 0, total: 0, failed: 0 });
+    s.n += 1;
+    s.total += c.ms;
+    s.worst = Math.max(s.worst, c.ms);
+    if (!c.ok) s.failed += 1;
+  }
+  const rows = Object.entries(byCmd).sort((a, b) => b[1].worst - a[1].worst);
+  const slow = (ms) => (ms >= 1000 ? "text-glitch-red" : ms >= 250 ? "text-flame" : "text-mute");
 
   return (
-    <section className="rounded-xl bg-paper/5 p-5 flex flex-col gap-3 md:col-span-2">
-      <h2 className="text-xs font-medium text-mute uppercase tracking-wide">Connection</h2>
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-sm text-paper">{headline}</p>
-          <p className="text-xs text-mute mt-1 max-w-prose">{reason}</p>
+    <div className="w-full max-w-4xl flex flex-col gap-4">
+      <section className="rounded-xl bg-paper/5 p-5 flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xs font-medium text-mute uppercase tracking-wide">
+            Backend calls, worst first
+          </h2>
+          <button
+            onClick={() => {
+              devCalls.length = 0;
+              setCalls([]);
+            }}
+            className="rounded-md bg-paper/10 hover:bg-paper/20 px-3 py-1 text-xs transition-colors"
+          >
+            Clear
+          </button>
         </div>
-        <StatePill enabled={status.running} />
-      </div>
-      <div className="flex gap-4 flex-wrap items-baseline text-xs text-mute">
-        <span>
-          Starts with Windows:{" "}
-          <span className="text-paper">{status.start_type === "auto" ? "yes" : "no"}</span>
-        </span>
-        {status.domain_count > 0 && (
-          <span className="cursor-help" title={status.domains.join("\n")}>
-            Unblocking: <span className="text-paper">{shown}</span>
-            {rest > 0 && `, and ${rest} more`}
-          </span>
+        {rows.length === 0 ? (
+          <p className="text-sm text-mute">Nothing called yet.</p>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-xs text-faint text-left">
+                <th className="font-medium pb-1">command</th>
+                <th className="font-medium pb-1 text-right">calls</th>
+                <th className="font-medium pb-1 text-right">avg</th>
+                <th className="font-medium pb-1 text-right">worst</th>
+                <th className="font-medium pb-1 text-right">failed</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(([cmd, s]) => (
+                <tr key={cmd} className="border-t border-paper/5">
+                  <td className="py-1 font-mono text-xs text-paper">{cmd}</td>
+                  <td className="py-1 text-right text-mute">{s.n}</td>
+                  <td className="py-1 text-right text-mute">{Math.round(s.total / s.n)} ms</td>
+                  <td className={`py-1 text-right ${slow(s.worst)}`}>{Math.round(s.worst)} ms</td>
+                  <td className={`py-1 text-right ${s.failed ? "text-glitch-red" : "text-faint"}`}>
+                    {s.failed}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         )}
-        <span className="cursor-help text-faint" title={UNBLOCK_LIMIT}>
-          what this cannot do
-        </span>
-      </div>
-      {status.config && (
-        <p
-          className="font-mono text-[11px] text-faint truncate"
-          title="The exact command this service runs, straight from Windows."
-        >
-          {status.config}
+        <p className="text-xs text-faint">
+          Anything past 250 ms is warm, past 1000 ms the window can feel stuck. A sync Tauri
+          command runs on the main thread, so slow ones need `#[tauri::command(async)]`.
         </p>
-      )}
-      <button
-        onClick={() => onGo("startup")}
-        className="self-start rounded-lg bg-paper/10 hover:bg-paper/20 px-4 py-2 text-sm font-medium transition-colors"
-      >
-        See it in startup →
-      </button>
-    </section>
+      </section>
+
+      <section className="rounded-xl bg-paper/5 p-5 flex flex-col gap-2">
+        <h2 className="text-xs font-medium text-mute uppercase tracking-wide">
+          Last {calls.length} calls, newest first
+        </h2>
+        <ul className="flex flex-col gap-0.5 font-mono text-xs max-h-80 overflow-y-auto">
+          {calls.map((c, i) => (
+            <li key={i} className="flex gap-3">
+              <span className="text-faint w-20 shrink-0">
+                {new Date(c.at).toLocaleTimeString()}
+              </span>
+              <span className={`w-16 shrink-0 text-right ${slow(c.ms)}`}>
+                {Math.round(c.ms)} ms
+              </span>
+              <span className={c.ok ? "text-paper" : "text-glitch-red"}>
+                {c.cmd}
+                {!c.ok && ` : ${c.err}`}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </section>
+    </div>
   );
 }
 
@@ -1155,7 +1334,7 @@ function HomeView({ onGo }) {
   }, []);
 
   useEffect(() => {
-    invoke("scan_autostarts").then(setEntries, (e) => setScanError(String(e)));
+    scanAutostarts().then(setEntries, (e) => setScanError(String(e)));
   }, []);
 
   const memPct = snap ? Math.round((snap.mem_used / snap.mem_total) * 100) : 0;
@@ -1323,8 +1502,6 @@ function HomeView({ onGo }) {
               : `Review these ${suggestions.length} →`}
         </button>
       </section>
-
-      <UnblockCard onGo={onGo} />
     </div>
   );
 }
@@ -1438,10 +1615,19 @@ function App() {
   // Home can deep-link into the startup screen with a verdict filter already
   // applied ("review these"). Clicking the nav tab itself resets to "all".
   const [startupFilter, setStartupFilter] = useState("all");
+  // The Connection tab only exists on machines that actually have an unblocker
+  // installed. Mganga explains what it finds, it never advertises a tool.
+  const [unblock, setUnblock] = useState(null);
+  const refreshUnblock = () =>
+    invoke("get_unblock_status").then(setUnblock, () => setUnblock(null));
   const go = (id, filter) => {
     if (id === "startup") setStartupFilter(filter || "all");
     setTab(id);
   };
+
+  useEffect(() => {
+    refreshUnblock();
+  }, []);
 
   // The background check (Rust side) emits this when a newer version is ready.
   useEffect(() => {
@@ -1472,8 +1658,10 @@ function App() {
             ["home", "Home"],
             ["rightnow", "Running now"],
             ["startup", "Starts with Windows"],
+            ...(unblock?.installed ? [["connection", "Connection"]] : []),
             ["history", "History"],
             ["settings", "Settings"],
+            ...(DEV ? [["dev", "Dev"]] : []),
           ].map(([id, label]) => (
             <button
               key={id}
@@ -1506,8 +1694,12 @@ function App() {
       {tab === "home" && <HomeView onGo={go} />}
       {tab === "rightnow" && <RightNowView />}
       {tab === "startup" && <StartupView initialFilter={startupFilter} />}
+      {tab === "connection" && (
+        <ConnectionView status={unblock} onRefresh={refreshUnblock} onGo={go} />
+      )}
       {tab === "history" && <HistoryView />}
       {tab === "settings" && <SettingsView />}
+      {tab === "dev" && DEV && <DevView />}
     </main>
   );
 }
