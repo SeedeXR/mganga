@@ -275,6 +275,6 @@
     "exe": ["goodbyedpi.exe"],
     "name_contains": ["goodbyedpi"],
     "verdict": "keep",
-    "reason": "This is what makes Discord load on this connection. Your provider blocks Discord by name, and this splits the connection setup so the block cannot read it. Turn it off and Discord stops working."
+    "reason": "This gets past a provider block that filters sites by name. It splits the first message of each connection so the name cannot be read, and only the sites on its own list are affected. Turn it off and those sites stop loading."
   }
 ]

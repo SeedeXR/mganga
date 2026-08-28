@@ -1043,29 +1043,43 @@ const BAR_COLORS = {
 
 // The landing screen: Mganga's two questions answered at a glance, each card
 // a door into the full screen. Charts stay small; the sentences carry it.
-// Brick 8a: the connection shield card, read-only. Renders nothing when the
-// GoodbyeDPI service is not installed, so machines without a shield never see
-// a Discord card. Spec: mganga-docs/docs/brick-8-connection-shield.md
-function ShieldCard({ onGo }) {
+// TODO(owner): the honest limit, in your words. Shown when someone hovers
+// "what this cannot do". One or two sentences on the kind of block this does
+// NOT fix, so nobody expects it to unblock everything. Draft below, overwrite it.
+const UNBLOCK_LIMIT =
+  "This only gets past one kind of block, where your provider reads the site name as the connection opens. A site blocked by address, or by the site itself, will not be helped by this.";
+
+// Brick 8a: the connection unblocker card, read-only. Renders nothing when no
+// such service is installed, so people who have never needed one never see it,
+// and Mganga never suggests installing one.
+//
+// Nothing here names a particular site. The sites come from the service's own
+// list on this machine, so whoever is unblocking Telegram sees Telegram.
+// Spec: mganga-docs/docs/brick-8-connection-shield.md
+function UnblockCard({ onGo }) {
   const [status, setStatus] = useState(null);
 
   useEffect(() => {
     // Errors also render nothing: Home stays calm, same rule as the poller.
-    invoke("get_shield_status").then(setStatus, () => setStatus(null));
+    invoke("get_unblock_status").then(setStatus, () => setStatus(null));
   }, []);
 
   if (!status || !status.installed) return null;
 
   const headline = !status.running
-    ? "Discord shield is off"
+    ? "Connection unblocker is off"
     : status.start_type === "auto"
-      ? "Discord shield is on"
-      : "Shield is on, but not at startup";
+      ? "Connection unblocker is on"
+      : "It is on, but not at startup";
   const reason = !status.running
-    ? "Discord will not load until you turn this back on."
+    ? "The sites on your list will not load until you turn this back on."
     : status.start_type === "auto"
-      ? "Your provider blocks Discord by name. This splits the connection setup so the block cannot read it. Only Discord traffic is touched."
+      ? "Your provider blocks some sites by reading their name as the connection opens. This splits that first message so the name cannot be read. Only the sites on your list are affected, everything else goes out untouched."
       : "It is running now, but it will not come back after you restart.";
+
+  // Scope is claimed only when the list was actually read. No list, no claim.
+  const shown = status.domains.slice(0, 2).join(", ");
+  const rest = status.domain_count - Math.min(2, status.domains.length);
 
   return (
     <section className="rounded-xl bg-paper/5 p-5 flex flex-col gap-3 md:col-span-2">
@@ -1077,20 +1091,29 @@ function ShieldCard({ onGo }) {
         </div>
         <StatePill enabled={status.running} />
       </div>
-      <div className="flex gap-4 flex-wrap text-xs text-mute">
+      <div className="flex gap-4 flex-wrap items-baseline text-xs text-mute">
         <span>
           Starts with Windows:{" "}
           <span className="text-paper">{status.start_type === "auto" ? "yes" : "no"}</span>
         </span>
-        {status.config && (
-          <span
-            className="cursor-help truncate max-w-md"
-            title="The exact command the service runs. The domain list file is the scope: only those names are touched."
-          >
-            <span className="font-mono text-faint">{status.config}</span>
+        {status.domain_count > 0 && (
+          <span className="cursor-help" title={status.domains.join("\n")}>
+            Unblocking: <span className="text-paper">{shown}</span>
+            {rest > 0 && `, and ${rest} more`}
           </span>
         )}
+        <span className="cursor-help text-faint" title={UNBLOCK_LIMIT}>
+          what this cannot do
+        </span>
       </div>
+      {status.config && (
+        <p
+          className="font-mono text-[11px] text-faint truncate"
+          title="The exact command this service runs, straight from Windows."
+        >
+          {status.config}
+        </p>
+      )}
       <button
         onClick={() => onGo("startup")}
         className="self-start rounded-lg bg-paper/10 hover:bg-paper/20 px-4 py-2 text-sm font-medium transition-colors"
@@ -1301,7 +1324,7 @@ function HomeView({ onGo }) {
         </button>
       </section>
 
-      <ShieldCard onGo={onGo} />
+      <UnblockCard onGo={onGo} />
     </div>
   );
 }
