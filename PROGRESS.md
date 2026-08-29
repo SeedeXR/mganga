@@ -34,6 +34,7 @@ The app runs with `npm run tauri dev` from the project root.
 | 8a | Connection unblocker, read-only: `unblock.rs` service query + Home card (GoodbyeDPI) | Built 2026-08-27, verified vs `sc query`/`sc qc`. **GATE PENDING: card-vs-reality look** |
 | 8b | Shield toggle via broker (first service write, `ALLOWED_SERVICES` whitelist) | Not started, waits on 8a gate |
 | 8c | Reachability probe | Owner decision 2026-08-27: no network without asking per use; only if ever wanted |
+| 9 | Connection check: "is it me, the site, or my provider?" | **Spec only** (`mganga-docs/docs/brick-9-connection-check.md`), awaiting approval |
 
 ## Pending gates (user actions, in order of effort)
 
@@ -45,11 +46,12 @@ The app runs with `npm run tauri dev` from the project root.
 3. **Brick 4, next reboot:** Steam was toggled OFF in Mganga (2026-06-06). After reboot:
    Steam must NOT auto-start, Mganga must still show it Off, Task Manager Startup apps
    must agree. Then flip it back on, and try History → Undo on one change.
-4. **Brick 8a, one minute:** open Home, check the Connection card matches `sc query
-   GoodbyeDPI`. Stop the service by hand (`sc stop GoodbyeDPI` as admin), switch tabs and
-   back, the card must say the unblocker is off. Start it again. Note: the card renders
-   nothing when the service is absent (deliberate deviation from the spec, public app),
-   and `UNBLOCK_LIMIT` in `App.jsx` is a TODO awaiting the owner's own wording.
+4. **Brick 8a, one minute:** Starts with Windows → open the "Connection unblocker" strip
+   above the lists, check it matches `sc query GoodbyeDPI`. Stop the service by hand
+   (`sc stop GoodbyeDPI` as admin), switch tabs and back, it must say off. Start it again.
+   Note: the strip renders nothing when the service is absent (deliberate deviation from
+   the spec, public app), and `UNBLOCK_LIMIT` in `App.jsx` is a TODO awaiting the owner's
+   own wording.
 
 ## Where everything lives
 
@@ -61,10 +63,13 @@ Mganga Project/            <- open this folder in RustRover
 ├── Cargo.toml             <- workspace pointer (members = ["src-tauri"]) for IDE detection
 ├── mganga-docs/           <- the spec (read CLAUDE.md + docs/ before changing anything)
 ├── package.json, vite.config.js, index.html
-├── src/App.jsx            <- whole frontend (tabs: Home / Running now / Starts with Windows /
-│                             History; Home (default, added 2026-06-07) answers both questions
-│                             at a glance: diagnosis + 60s sparkline + verdict bar, hand-rolled
-│                             SVG, no chart lib. The old Plumbing dev tab was removed 2026-06-07.)
+├── src/App.jsx            <- whole frontend. Four tabs (2026-08-30): Home / Starts with
+│                             Windows / History / Settings, plus a Dev tab in dev builds only.
+│                             Home = a one-line startup banner over the full live view
+│                             (RightNowView), which owns the only get_processes poll and the
+│                             60s sparkline (hand-rolled SVG, no chart lib). The connection
+│                             unblocker is a collapsible strip on the startup screen, where
+│                             its Windows service already appears as a row.
 ├── src/App.css            <- just the Tailwind import
 └── src-tauri/
     ├── tauri.conf.json        <- beforeDevCommand also builds the broker exe

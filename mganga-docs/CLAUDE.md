@@ -12,6 +12,8 @@ Read those when the task touches them.
 - `docs/build-plan.md` — the brick-by-brick build order, with a stop-and-review gate after each
 - `docs/references.md` — the repos to clone and borrow from, plus fetchable doc links
 - `docs/ui-guide.md` — how the interface should look and talk
+- `docs/disk-triage.md` — disk space: how to tell a rebuildable cache from live storage (reference, not a brick)
+- `docs/memory-recon.md` — measured memory data from a real machine, and which of the four "memory used" numbers to trust
 
 ## What we are building
 

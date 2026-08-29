@@ -172,7 +172,7 @@ function StatePill({ enabled }) {
   );
 }
 
-function StartupView({ initialFilter = "all" }) {
+function StartupView({ initialFilter = "all", unblock, onRefreshUnblock }) {
   const [entries, setEntries] = useState(null);
   const [error, setError] = useState("");
   const [actionError, setActionError] = useState("");
@@ -294,6 +294,8 @@ function StartupView({ initialFilter = "all" }) {
           </button>
         ))}
       </div>
+
+      <UnblockSection status={unblock} onRefresh={onRefreshUnblock} />
 
       {KINDS.map(({ id, label }) => {
         const group = entries.filter(
@@ -596,6 +598,7 @@ const ACTION_HINTS = {
 
 function RightNowView() {
   const [snap, setSnap] = useState(null);
+  const [samples, setSamples] = useState([]);
   const [error, setError] = useState("");
   const [actionError, setActionError] = useState("");
   const [sortKey, setSortKey] = useState("cpu"); // "cpu" | "memory"
@@ -635,12 +638,20 @@ function RightNowView() {
   useEffect(() => {
     let alive = true;
     async function poll() {
-      if (hoveringRef.current) return; // frozen while the user aims
       try {
         const s = await invoke("get_processes");
-        // Re-check after the await: the mouse may have arrived while this
-        // request was in flight, and a late update would shift rows anyway.
-        if (alive && !hoveringRef.current) setSnap(s);
+        if (!alive) return;
+        // The graph keeps its own time even while the list is frozen, so a
+        // paused list never reads back as a minute of idleness.
+        // Ring buffer: 30 samples at 2s = the last minute.
+        setSamples((prev) => [
+          ...prev.slice(-29),
+          { cpu: s.cpu_total, mem: (s.mem_used / s.mem_total) * 100 },
+        ]);
+        // The list holds still while the mouse is over it so rows stop
+        // shifting under the cursor. Re-checked after the await, because the
+        // mouse may have arrived while this request was in flight.
+        if (!hoveringRef.current) setSnap(s);
       } catch (e) {
         if (alive) setError(String(e));
       }
@@ -762,6 +773,14 @@ function RightNowView() {
               →
             </button>
           )}
+        </div>
+      </div>
+
+      <div className="rounded-xl bg-paper/5 px-4 pt-3 pb-2">
+        <Sparkline samples={samples} />
+        <div className="text-xs text-faint mt-1">
+          the last minute · <span className="text-mute">processor</span> ·{" "}
+          <span className="text-faint">memory</span>
         </div>
       </div>
 
@@ -1096,14 +1115,18 @@ const UNBLOCK_LIMIT =
 // Nothing here names a particular site. The sites come from the service's own
 // list on this machine, so whoever is unblocking Telegram sees Telegram.
 // Spec: mganga-docs/docs/brick-8-connection-shield.md
-function ConnectionView({ status, onRefresh, onGo }) {
+// The unblocker is an automatic Windows service, so it is already a row in the
+// list above. This is that row's explanation, folded in here rather than given
+// its own tab: a screen most machines would never show.
+function UnblockSection({ status, onRefresh }) {
+  const [open, setOpen] = useState(false);
+
   // Re-read on arrival: the service can be stopped or started from outside.
   useEffect(() => {
     onRefresh();
   }, []);
 
-  if (!status) return <Loading label="Checking your connection tools..." />;
-  if (!status.installed) return null;
+  if (!status || !status.installed) return null;
 
   const headline = !status.running
     ? "Connection unblocker is off"
@@ -1117,15 +1140,22 @@ function ConnectionView({ status, onRefresh, onGo }) {
       : "It is running now, but it will not come back after you restart.";
 
   return (
-    <div className="w-full max-w-4xl flex flex-col gap-4">
-      <section className="rounded-xl bg-paper/5 p-5 flex flex-col gap-4">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h2 className="font-display text-xl font-bold">{headline}</h2>
-            <p className="text-sm text-mute mt-1.5 max-w-prose">{reason}</p>
-          </div>
-          <StatePill enabled={status.running} />
-        </div>
+    <section className="rounded-xl bg-paper/5 overflow-hidden">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center gap-3 px-5 py-3.5 text-left hover:bg-paper/5 transition-colors"
+      >
+        <span className="text-xs text-faint w-3">{open ? "▾" : "▸"}</span>
+        <span className="font-medium text-paper">{headline}</span>
+        <StatePill enabled={status.running} />
+        <span className="ml-auto text-xs text-mute">
+          {open ? "hide" : "what is this?"}
+        </span>
+      </button>
+
+      {open && (
+        <div className="px-5 pb-5 pt-1 flex flex-col gap-5 border-t border-paper/10">
+        <p className="text-sm text-mute max-w-prose pt-4">{reason}</p>
 
         {/* Scope is claimed only when the list was actually read. */}
         {status.domain_count > 0 && (
@@ -1160,9 +1190,7 @@ function ConnectionView({ status, onRefresh, onGo }) {
             Windows service: <span className="text-paper">GoodbyeDPI</span>
           </span>
         </div>
-      </section>
-
-      <section className="rounded-xl bg-paper/5 p-5 flex flex-col gap-3">
+        <div className="flex flex-col gap-3 border-t border-paper/10 pt-4">
         <h2 className="text-xs font-medium text-mute uppercase tracking-wide">How this works</h2>
         <p className="text-sm text-mute max-w-prose">
           The tool doing this is <span className="text-paper">GoodbyeDPI</span>, a free open
@@ -1190,14 +1218,10 @@ function ConnectionView({ status, onRefresh, onGo }) {
             <p className="font-mono text-[11px] text-faint mt-1.5 break-all">{status.config}</p>
           </div>
         )}
-        <button
-          onClick={() => onGo("startup")}
-          className="self-start rounded-lg bg-paper/10 hover:bg-paper/20 px-4 py-2 text-sm font-medium transition-colors"
-        >
-          See it in startup →
-        </button>
-      </section>
-    </div>
+        </div>
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -1303,173 +1327,45 @@ function DevView() {
   );
 }
 
+// Home is not a menu of previews any more. It answers the live question in
+// full (RightNowView below) and carries the startup question as a banner, so
+// there is one screen per question instead of a landing page in front of them.
 function HomeView({ onGo }) {
-  const [snap, setSnap] = useState(null);
-  const [samples, setSamples] = useState([]);
   const [entries, setEntries] = useState(null);
   const [scanError, setScanError] = useState("");
-
-  useEffect(() => {
-    let alive = true;
-    async function poll() {
-      try {
-        const s = await invoke("get_processes");
-        if (!alive) return;
-        setSnap(s);
-        // Ring buffer: 30 samples at 2s = the last minute.
-        setSamples((prev) => [
-          ...prev.slice(-29),
-          { cpu: s.cpu_total, mem: (s.mem_used / s.mem_total) * 100 },
-        ]);
-      } catch {
-        // Home stays calm; the Running now screen reports polling errors.
-      }
-    }
-    poll();
-    const t = setInterval(poll, 2000);
-    return () => {
-      alive = false;
-      clearInterval(t);
-    };
-  }, []);
 
   useEffect(() => {
     scanAutostarts().then(setEntries, (e) => setScanError(String(e)));
   }, []);
 
-  const memPct = snap ? Math.round((snap.mem_used / snap.mem_total) * 100) : 0;
-  const cpuPct = snap ? Math.round(snap.cpu_total) : 0;
-  const diag = snap ? buildDiagnosis(snap) : null;
-  // When the machine is comfortable the diagnosis names nobody, so the card
-  // falls back to the busiest few in a calm tone.
-  const busiest = snap
-    ? [...snap.groups]
-        .sort((a, b) => b.cpu - a.cpu)
-        .slice(0, 3)
-        .map((g) => ({ name: g.name, label: `${Math.round(g.cpu)}%`, raw: g.cpu }))
-    : [];
-
-  const safeCount = entries
-    ? entries.filter((e) => e.verdict === "safe-to-disable" && e.enabled).length
-    : 0;
   const verdictCounts = entries
     ? Object.keys(VERDICTS)
         .map((id) => [id, entries.filter((e) => e.verdict === id).length])
         .filter(([, n]) => n > 0)
     : [];
-  // The named suggestions behind the "probably don't need to" claim: still
-  // launching at every boot and judged safe to turn off. Longest-unused first,
-  // because that is the most convincing evidence.
+  // The named entries behind the "probably don't need to" claim live on the
+  // startup screen, next to their switches. The banner only counts them.
   const suggestions = entries
-    ? entries
-        .filter((e) => e.enabled && e.verdict === "safe-to-disable")
-        .sort((a, b) => (b.last_opened_days ?? -1) - (a.last_opened_days ?? -1))
+    ? entries.filter((e) => e.enabled && e.verdict === "safe-to-disable")
     : [];
 
   return (
-    <div className="w-full max-w-4xl grid md:grid-cols-2 gap-4 items-start">
-      <section className="rounded-xl bg-paper/5 p-5 flex flex-col gap-4">
-        <h2 className="text-xs font-medium text-mute uppercase tracking-wide">Right now</h2>
-        {!snap ? (
-          <Loading size={56} label="Taking the first measurement..." />
-        ) : (
-          <>
-            <div>
-              <p className="text-sm text-paper">{diag.text}</p>
-              {diag.culprits.length > 0 ? (
-                <CulpritList culprits={diag.culprits} />
-              ) : (
-                busiest.length > 0 && (
-                  <>
-                    <p className="text-xs text-mute mt-3">Busiest right now:</p>
-                    <CulpritList culprits={busiest} tone="calm" />
-                  </>
-                )
-              )}
-            </div>
-            <div className="flex items-center gap-6">
-              <div className="flex items-center gap-2.5">
-                <span className={`rounded-lg bg-paper/10 p-2 ${cpuPct >= 60 ? "text-flame" : "text-mute"}`}>
-                  <CpuIcon />
-                </span>
-                <div>
-                  <div className="font-display text-xl font-bold">{cpuPct}%</div>
-                  <div className="text-xs text-mute">processor</div>
-                </div>
-              </div>
-              <div className="flex items-center gap-2.5">
-                <span className={`relative rounded-lg bg-paper/10 p-2 ${memPct >= 80 ? "text-flame" : "text-mute"}`}>
-                  <RamIcon />
-                  {memPct >= 80 && (
-                    <span className="mganga-flicker absolute -top-2.5 -right-1.5 text-sm" aria-hidden="true">
-                      🔥
-                    </span>
-                  )}
-                </span>
-                <div>
-                  <div className="font-display text-xl font-bold">{memPct}%</div>
-                  <div className="text-xs text-mute">memory</div>
-                </div>
-              </div>
-            </div>
-            <div>
-              <Sparkline samples={samples} />
-              <div className="text-xs text-faint mt-1">
-                the last minute · <span className="text-mute">processor</span> ·{" "}
-                <span className="text-faint">memory</span>
-              </div>
-            </div>
-          </>
-        )}
-        <button
-          onClick={() => onGo("rightnow")}
-          className="self-start rounded-lg bg-paper/10 hover:bg-paper/20 px-4 py-2 text-sm font-medium transition-colors"
-        >
-          See everything running →
-        </button>
-      </section>
-
-      <section className="rounded-xl bg-paper/5 p-5 flex flex-col gap-4">
-        <h2 className="text-xs font-medium text-mute uppercase tracking-wide">At startup</h2>
+    <div className="w-full max-w-4xl flex flex-col gap-4">
+      <section className="rounded-xl bg-paper/5 px-5 py-4 flex items-center justify-between gap-6">
         {scanError ? (
           <p className="text-sm text-glitch-red">{scanError}</p>
         ) : !entries ? (
-          <Loading size={56} label="Taking inventory of what starts with Windows..." />
+          <Loading size={40} label="Taking inventory of what starts with Windows..." />
         ) : (
           <>
-            <p className="text-sm text-paper">
-              {entries.length} things are set to start with Windows.{" "}
-              {safeCount > 0
-                ? `These ${safeCount} probably don't need to:`
-                : "Nothing jumps out as unnecessary."}
-            </p>
-            {suggestions.length > 0 && (
-              <ul className="flex flex-col gap-1.5">
-                {suggestions.slice(0, 5).map((e, i) => (
-                  <li
-                    key={`${e.source_detail}|${e.name}|${i}`}
-                    className="flex items-baseline justify-between gap-4 text-sm"
-                  >
-                    <span className="text-paper truncate">{e.name}</span>
-                    <span
-                      className="text-xs text-mute whitespace-nowrap cursor-help"
-                      title={e.reason}
-                    >
-                      {e.last_opened_days != null
-                        ? `last opened ${humanDays(e.last_opened_days)}`
-                        : "no recent use on record"}
-                    </span>
-                  </li>
-                ))}
-                {suggestions.length > 5 && (
-                  <li className="text-xs text-faint">
-                    and {suggestions.length - 5} more on the startup screen
-                  </li>
-                )}
-              </ul>
-            )}
-            <div>
-              <div className="flex h-2 rounded-full overflow-hidden bg-paper/5">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm text-paper">
+                {entries.length} things are set to start with Windows.{" "}
+                {suggestions.length > 0
+                  ? `${suggestions.length} probably don't need to.`
+                  : "Nothing jumps out as unnecessary."}
+              </p>
+              <div className="flex h-2 rounded-full overflow-hidden bg-paper/5 mt-2.5 max-w-md">
                 {verdictCounts.map(([id, n]) => (
                   <span
                     key={id}
@@ -1487,21 +1383,23 @@ function HomeView({ onGo }) {
                 ))}
               </div>
             </div>
+            <button
+              onClick={() =>
+                suggestions.length > 0 ? onGo("startup", "safe-to-disable") : onGo("startup")
+              }
+              className="shrink-0 rounded-lg bg-paper/10 hover:bg-paper/20 px-4 py-2 text-sm font-medium transition-colors"
+            >
+              {suggestions.length === 0
+                ? "Manage startup →"
+                : suggestions.length === 1
+                  ? "Review it →"
+                  : `Review these ${suggestions.length} →`}
+            </button>
           </>
         )}
-        <button
-          onClick={() =>
-            suggestions.length > 0 ? onGo("startup", "safe-to-disable") : onGo("startup")
-          }
-          className="self-start rounded-lg bg-paper/10 hover:bg-paper/20 px-4 py-2 text-sm font-medium transition-colors"
-        >
-          {suggestions.length === 0
-            ? "Manage startup →"
-            : suggestions.length === 1
-              ? "Review it →"
-              : `Review these ${suggestions.length} →`}
-        </button>
       </section>
+
+      <RightNowView />
     </div>
   );
 }
@@ -1615,8 +1513,9 @@ function App() {
   // Home can deep-link into the startup screen with a verdict filter already
   // applied ("review these"). Clicking the nav tab itself resets to "all".
   const [startupFilter, setStartupFilter] = useState("all");
-  // The Connection tab only exists on machines that actually have an unblocker
-  // installed. Mganga explains what it finds, it never advertises a tool.
+  // Read once here and handed to the startup screen, where the unblocker shows
+  // up as one of the automatic services. Machines without one render nothing:
+  // Mganga explains what it finds, it never advertises a tool.
   const [unblock, setUnblock] = useState(null);
   const refreshUnblock = () =>
     invoke("get_unblock_status").then(setUnblock, () => setUnblock(null));
@@ -1656,9 +1555,7 @@ function App() {
         <nav className="flex gap-1 rounded-lg bg-paper/5 p-1">
           {[
             ["home", "Home"],
-            ["rightnow", "Running now"],
             ["startup", "Starts with Windows"],
-            ...(unblock?.installed ? [["connection", "Connection"]] : []),
             ["history", "History"],
             ["settings", "Settings"],
             ...(DEV ? [["dev", "Dev"]] : []),
@@ -1692,10 +1589,12 @@ function App() {
       )}
 
       {tab === "home" && <HomeView onGo={go} />}
-      {tab === "rightnow" && <RightNowView />}
-      {tab === "startup" && <StartupView initialFilter={startupFilter} />}
-      {tab === "connection" && (
-        <ConnectionView status={unblock} onRefresh={refreshUnblock} onGo={go} />
+      {tab === "startup" && (
+        <StartupView
+          initialFilter={startupFilter}
+          unblock={unblock}
+          onRefreshUnblock={refreshUnblock}
+        />
       )}
       {tab === "history" && <HistoryView />}
       {tab === "settings" && <SettingsView />}
