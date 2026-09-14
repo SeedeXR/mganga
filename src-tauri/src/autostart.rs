@@ -56,6 +56,10 @@ pub struct AutostartEntry {
     /// signer, install location) for programs Mganga does not recognize.
     /// None until the scan fills it in.
     pub evidence: Option<FileEvidence>,
+    /// Issue #2: "consider uninstalling", only where the evidence clearly
+    /// supports it (see installed.rs). A suggestion beside the verdict, never
+    /// a change to it.
+    pub uninstall: Option<crate::installed::UninstallSuggestion>,
 }
 
 #[derive(Serialize, Clone)]
@@ -75,6 +79,7 @@ pub fn scan() -> Vec<AutostartEntry> {
 
     // Usage evidence first, then every entry gets a verdict and a reason.
     let usage = crate::usage::collect();
+    let installed = crate::installed::scan();
     for entry in &mut entries {
         let exe = extract_exe(&entry.command);
 
@@ -121,6 +126,15 @@ pub fn scan() -> Vec<AutostartEntry> {
             }
         }
         entry.evidence = Some(ev);
+
+        // Issue #2, after the verdict is final: does the evidence also say
+        // this program could simply go? The verdict itself is untouched.
+        entry.uninstall = crate::installed::suggest(
+            &installed,
+            exe.as_deref(),
+            &entry.verdict,
+            entry.last_opened_days,
+        );
     }
 
     let kind_order = |k: &str| match k {

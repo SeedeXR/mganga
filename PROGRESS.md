@@ -71,6 +71,8 @@ Mganga Project/            <- open this folder in RustRover
     ├── src/autostart.rs       <- Brick 2 scanner + toggle coordinates
     ├── src/judge.rs           <- verdicts: autostart (judge) + process (judge_process)
     ├── src/known_apps.json    <- the editable rules data (category -> verdict+reason)
+    ├── src/installed.rs       <- issue #2: Uninstall-key scan, exe -> program mapping, the
+    │                             uninstall suggestion + launch of the program's own uninstaller
     ├── src/usage.rs           <- UserAssist reader (last-opened evidence)
     ├── src/processes.rs       <- live snapshot, grouped + summed
     ├── src/actions.rs         <- HKCU StartupApproved writes (+ roundtrip tests)

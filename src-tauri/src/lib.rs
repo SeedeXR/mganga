@@ -4,6 +4,7 @@ mod autostart;
 mod broker_client;
 mod evidence;
 mod guard;
+mod installed;
 mod judge;
 mod proc_control;
 mod processes;
@@ -387,6 +388,35 @@ fn undo_change(state: State<Broker>, id: String) -> Result<(), String> {
     })
 }
 
+/// Issue #2: open a program's own uninstaller. Mganga never removes software
+/// itself. The registry entry is re-read from `key`, so the frontend never
+/// supplies a command line. Logged as informational: there is no undo for a
+/// window that was opened, and the uninstaller's own work is not Mganga's.
+#[tauri::command]
+fn launch_uninstaller(key: String) -> Result<Value, String> {
+    let (opened, program) = installed::launch(&key)?;
+    let time_ms = audit::now_ms();
+    let _ = audit::append(&audit::AuditRecord {
+        id: audit::new_id(time_ms),
+        time_ms,
+        action: "launch-uninstaller".to_string(),
+        hive: String::new(),
+        approved_path: String::new(),
+        value_name: program,
+        old_value_hex: None,
+        undoes: None,
+        detail: Some(
+            if opened == "settings" {
+                "its uninstaller would not start, so Windows Settings was opened instead"
+            } else {
+                "the program's own uninstaller"
+            }
+            .to_string(),
+        ),
+    });
+    Ok(json!({ "opened": opened }))
+}
+
 // ---- Settings + updates ----
 
 /// Current settings, defaults if the file is missing or damaged.
@@ -445,6 +475,7 @@ pub fn run() {
             set_autostart_enabled,
             list_audit_log,
             undo_change,
+            launch_uninstaller,
             get_settings,
             set_auto_update_check,
             app_version,
