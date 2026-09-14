@@ -269,12 +269,5 @@
     "name_contains": ["webthreatdefusersvc", "webthreatdefsvc"],
     "verdict": "protected",
     "reason": "Part of Windows' protection against dangerous websites. Mganga will not touch it."
-  },
-  {
-    "category": "connection",
-    "exe": ["goodbyedpi.exe"],
-    "name_contains": ["goodbyedpi"],
-    "verdict": "keep",
-    "reason": "This gets past a provider block that filters sites by name. It splits the first message of each connection so the name cannot be read, and only the sites on its own list are affected. Turn it off and those sites stop loading."
   }
 ]

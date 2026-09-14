@@ -15,12 +15,13 @@ to one of them:
 mindmap
   root((Mganga<br/>the healer))
     Why is my machine slow RIGHT NOW?
-      Right now tab
-        live process table, 2s poll
+      Home tab
+        one-line startup banner over the full live view
+        live process table, 2s poll, 60s sparkline
         diagnosis sentence at the top
-        actions: Ease off / Pause / Stop
+        actions: Efficiency mode / Pause / Stop
     What launches itself AT BOOT?
-      Startup tab
+      Starts with Windows tab
         full autostart inventory
         verdict + plain reason per entry
         reversible On/Off toggles
@@ -28,9 +29,8 @@ mindmap
       History tab
         audit log of every change
         per-change Undo
-    The proof bench
-      Plumbing tab
-        Brick 0 ping, Brick 1 broker demo
+    Settings tab: update check on/off, check now
+    Dev tab (dev builds only): backend call timings
 ```
 
 The guiding rule from the docs: **a healer does not poison the patient.** Everything
@@ -204,7 +204,7 @@ require a rebuild and a diff someone can review).
 
 ## 8. Runtime lifecycles, in one breath each
 
-- **App start:** window opens unelevated → Right now tab polls → no UAC, no broker yet.
+- **App start:** window opens unelevated → Home polls → no UAC, no broker yet.
 - **First machine-wide action:** broker launched via `runas` (one UAC prompt) → pipe
   connect with retries → stays for the session.
 - **App close:** pipe drops → broker reads EOF → exits. Broker also watches the GUI PID

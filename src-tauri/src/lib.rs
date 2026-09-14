@@ -8,7 +8,6 @@ mod judge;
 mod proc_control;
 mod processes;
 mod settings;
-mod unblock;
 mod updater;
 mod usage;
 
@@ -388,14 +387,6 @@ fn undo_change(state: State<Broker>, id: String) -> Result<(), String> {
     })
 }
 
-// ---- Connection unblocker (brick 8a) ----
-
-/// State of the connection unblocker service. Read-only, unelevated, no broker.
-#[tauri::command]
-fn get_unblock_status() -> Result<unblock::UnblockStatus, String> {
-    unblock::status()
-}
-
 // ---- Settings + updates ----
 
 /// Current settings, defaults if the file is missing or damaged.
@@ -454,7 +445,6 @@ pub fn run() {
             set_autostart_enabled,
             list_audit_log,
             undo_change,
-            get_unblock_status,
             get_settings,
             set_auto_update_check,
             app_version,

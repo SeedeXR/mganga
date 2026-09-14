@@ -172,7 +172,7 @@ function StatePill({ enabled }) {
   );
 }
 
-function StartupView({ initialFilter = "all", unblock, onRefreshUnblock }) {
+function StartupView({ initialFilter = "all" }) {
   const [entries, setEntries] = useState(null);
   const [error, setError] = useState("");
   const [actionError, setActionError] = useState("");
@@ -294,8 +294,6 @@ function StartupView({ initialFilter = "all", unblock, onRefreshUnblock }) {
           </button>
         ))}
       </div>
-
-      <UnblockSection status={unblock} onRefresh={onRefreshUnblock} />
 
       {KINDS.map(({ id, label }) => {
         const group = entries.filter(
@@ -1100,131 +1098,6 @@ const BAR_COLORS = {
   protected: "bg-faint/60",
 };
 
-// The landing screen: Mganga's two questions answered at a glance, each card
-// a door into the full screen. Charts stay small; the sentences carry it.
-// TODO(owner): the honest limit, in your words. Shown when someone hovers
-// "what this cannot do". One or two sentences on the kind of block this does
-// NOT fix, so nobody expects it to unblock everything. Draft below, overwrite it.
-const UNBLOCK_LIMIT =
-  "This only gets past one kind of block, where your provider reads the site name as the connection opens. A site blocked by address, or by the site itself, will not be helped by this.";
-
-// Brick 8a: the connection screen, read-only. Its tab only exists when such a
-// service is installed, so people who have never needed one never see it, and
-// Mganga never suggests installing one.
-//
-// Nothing here names a particular site. The sites come from the service's own
-// list on this machine, so whoever is unblocking Telegram sees Telegram.
-// Spec: mganga-docs/docs/brick-8-connection-shield.md
-// The unblocker is an automatic Windows service, so it is already a row in the
-// list above. This is that row's explanation, folded in here rather than given
-// its own tab: a screen most machines would never show.
-function UnblockSection({ status, onRefresh }) {
-  const [open, setOpen] = useState(false);
-
-  // Re-read on arrival: the service can be stopped or started from outside.
-  useEffect(() => {
-    onRefresh();
-  }, []);
-
-  if (!status || !status.installed) return null;
-
-  const headline = !status.running
-    ? "Connection unblocker is off"
-    : status.start_type === "auto"
-      ? "Connection unblocker is on"
-      : "It is on, but not at startup";
-  const reason = !status.running
-    ? "The sites on your list will not load until you turn this back on."
-    : status.start_type === "auto"
-      ? "Your provider blocks some sites by reading their name as the connection opens. This splits that first message so the name cannot be read. Only the sites on your list are affected, everything else goes out untouched."
-      : "It is running now, but it will not come back after you restart.";
-
-  return (
-    <section className="rounded-xl bg-paper/5 overflow-hidden">
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center gap-3 px-5 py-3.5 text-left hover:bg-paper/5 transition-colors"
-      >
-        <span className="text-xs text-faint w-3">{open ? "▾" : "▸"}</span>
-        <span className="font-medium text-paper">{headline}</span>
-        <StatePill enabled={status.running} />
-        <span className="ml-auto text-xs text-mute">
-          {open ? "hide" : "what is this?"}
-        </span>
-      </button>
-
-      {open && (
-        <div className="px-5 pb-5 pt-1 flex flex-col gap-5 border-t border-paper/10">
-        <p className="text-sm text-mute max-w-prose pt-4">{reason}</p>
-
-        {/* Scope is claimed only when the list was actually read. */}
-        {status.domain_count > 0 && (
-          <div>
-            <p className="text-xs font-medium text-mute uppercase tracking-wide">
-              Sites getting through ({status.domain_count})
-            </p>
-            <ul className="flex flex-wrap gap-1.5 mt-2">
-              {status.domains.map((d) => (
-                <li
-                  key={d}
-                  className="rounded-md bg-paper/10 px-2 py-1 font-mono text-xs text-paper"
-                >
-                  {d}
-                </li>
-              ))}
-            </ul>
-            {status.domain_count > status.domains.length && (
-              <p className="text-xs text-faint mt-1.5">
-                and {status.domain_count - status.domains.length} more on the list
-              </p>
-            )}
-          </div>
-        )}
-
-        <div className="flex gap-6 flex-wrap text-xs text-mute">
-          <span>
-            Starts with Windows:{" "}
-            <span className="text-paper">{status.start_type === "auto" ? "yes" : "no"}</span>
-          </span>
-          <span>
-            Windows service: <span className="text-paper">GoodbyeDPI</span>
-          </span>
-        </div>
-        <div className="flex flex-col gap-3 border-t border-paper/10 pt-4">
-        <h2 className="text-xs font-medium text-mute uppercase tracking-wide">How this works</h2>
-        <p className="text-sm text-mute max-w-prose">
-          The tool doing this is <span className="text-paper">GoodbyeDPI</span>, a free open
-          source program running as a Windows service. When your computer opens a secure
-          connection, it has to send the site name in the clear before the encryption starts.
-          Your provider reads the name at that moment and drops the connection.
-        </p>
-        <p className="text-sm text-mute max-w-prose">
-          GoodbyeDPI splits that first message into pieces, so the name is never sitting there
-          in one readable chunk. The site you are visiting reassembles it normally and never
-          notices. Your traffic still goes straight to the site, so nothing is rerouted through
-          another country and there is no speed cost. This is not a VPN.
-        </p>
-        <div>
-          <p className="text-xs font-medium text-mute uppercase tracking-wide">
-            What this cannot do
-          </p>
-          <p className="text-sm text-mute mt-1.5 max-w-prose">{UNBLOCK_LIMIT}</p>
-        </div>
-        {status.config && (
-          <div>
-            <p className="text-xs font-medium text-mute uppercase tracking-wide">
-              The exact command Windows runs
-            </p>
-            <p className="font-mono text-[11px] text-faint mt-1.5 break-all">{status.config}</p>
-          </div>
-        )}
-        </div>
-        </div>
-      )}
-    </section>
-  );
-}
-
 // Dev builds only: what the frontend asked the backend, and how long each call
 // took. This is the probe that found the five second autostart scan freezing
 // the window, so it stays.
@@ -1513,20 +1386,10 @@ function App() {
   // Home can deep-link into the startup screen with a verdict filter already
   // applied ("review these"). Clicking the nav tab itself resets to "all".
   const [startupFilter, setStartupFilter] = useState("all");
-  // Read once here and handed to the startup screen, where the unblocker shows
-  // up as one of the automatic services. Machines without one render nothing:
-  // Mganga explains what it finds, it never advertises a tool.
-  const [unblock, setUnblock] = useState(null);
-  const refreshUnblock = () =>
-    invoke("get_unblock_status").then(setUnblock, () => setUnblock(null));
   const go = (id, filter) => {
     if (id === "startup") setStartupFilter(filter || "all");
     setTab(id);
   };
-
-  useEffect(() => {
-    refreshUnblock();
-  }, []);
 
   // The background check (Rust side) emits this when a newer version is ready.
   useEffect(() => {
@@ -1589,13 +1452,7 @@ function App() {
       )}
 
       {tab === "home" && <HomeView onGo={go} />}
-      {tab === "startup" && (
-        <StartupView
-          initialFilter={startupFilter}
-          unblock={unblock}
-          onRefreshUnblock={refreshUnblock}
-        />
-      )}
+      {tab === "startup" && <StartupView initialFilter={startupFilter} />}
       {tab === "history" && <HistoryView />}
       {tab === "settings" && <SettingsView />}
       {tab === "dev" && DEV && <DevView />}

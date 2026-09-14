@@ -1,7 +1,8 @@
 # Mganga: build progress
 
-Last updated: 2026-08-27. All 8 bricks of `mganga-docs/docs/build-plan.md` are built,
-plus brick 8a of the connection shield (`mganga-docs/docs/brick-8-connection-shield.md`).
+Last updated: 2026-09-14. All 8 bricks of `mganga-docs/docs/build-plan.md` are built.
+The connection unblocker (a ninth brick started in August) was scrapped on 2026-09-14 by
+owner decision; nothing of it ships. Work now moves issue by issue through PRs.
 The app runs with `npm run tauri dev` from the project root.
 
 > 2026-06-07: the brand pass (`mganga-brand/APPLY-BRAND.md` from Downloads) was applied.
@@ -31,10 +32,6 @@ The app runs with `npm run tauri dev` from the project root.
 | 5 | Live process view: 2s polling, grouped by exe, Task-Manager-compatible numbers | Done, memory % matched WMI exactly |
 | 6 | Process control: Ease off (EcoQoS+idle), Pause/Resume (NtSuspendProcess), Stop (confirm) | Built, lifecycle tests pass. **GATE PENDING: Spotify loop** (see below) |
 | 7 | Polish: diagnosis sentence, verdict filters, jargon hover-explainers, process verdicts | Built. **GATE PENDING: "does it explain the slowness" read** |
-| 8a | Connection unblocker, read-only: `unblock.rs` service query + Home card (GoodbyeDPI) | Built 2026-08-27, verified vs `sc query`/`sc qc`. **GATE PENDING: card-vs-reality look** |
-| 8b | Shield toggle via broker (first service write, `ALLOWED_SERVICES` whitelist) | Not started, waits on 8a gate |
-| 8c | Reachability probe | Owner decision 2026-08-27: no network without asking per use; only if ever wanted |
-| 9 | Connection check: "is it me, the site, or my provider?" | **Spec only** (`mganga-docs/docs/brick-9-connection-check.md`), awaiting approval |
 
 ## Pending gates (user actions, in order of effort)
 
@@ -46,12 +43,6 @@ The app runs with `npm run tauri dev` from the project root.
 3. **Brick 4, next reboot:** Steam was toggled OFF in Mganga (2026-06-06). After reboot:
    Steam must NOT auto-start, Mganga must still show it Off, Task Manager Startup apps
    must agree. Then flip it back on, and try History → Undo on one change.
-4. **Brick 8a, one minute:** Starts with Windows → open the "Connection unblocker" strip
-   above the lists, check it matches `sc query GoodbyeDPI`. Stop the service by hand
-   (`sc stop GoodbyeDPI` as admin), switch tabs and back, it must say off. Start it again.
-   Note: the strip renders nothing when the service is absent (deliberate deviation from
-   the spec, public app), and `UNBLOCK_LIMIT` in `App.jsx` is a TODO awaiting the owner's
-   own wording.
 
 ## Where everything lives
 
@@ -67,9 +58,7 @@ Mganga Project/            <- open this folder in RustRover
 │                             Windows / History / Settings, plus a Dev tab in dev builds only.
 │                             Home = a one-line startup banner over the full live view
 │                             (RightNowView), which owns the only get_processes poll and the
-│                             60s sparkline (hand-rolled SVG, no chart lib). The connection
-│                             unblocker is a collapsible strip on the startup screen, where
-│                             its Windows service already appears as a row.
+│                             60s sparkline (hand-rolled SVG, no chart lib).
 ├── src/App.css            <- just the Tailwind import
 └── src-tauri/
     ├── tauri.conf.json        <- beforeDevCommand also builds the broker exe
@@ -82,8 +71,6 @@ Mganga Project/            <- open this folder in RustRover
     ├── src/autostart.rs       <- Brick 2 scanner + toggle coordinates
     ├── src/judge.rs           <- verdicts: autostart (judge) + process (judge_process)
     ├── src/known_apps.json    <- the editable rules data (category -> verdict+reason)
-    ├── src/unblock.rs         <- Brick 8a: connection-unblocker service status (read-only,
-    │                             unelevated); sites read from the service's own blacklist file
     ├── src/usage.rs           <- UserAssist reader (last-opened evidence)
     ├── src/processes.rs       <- live snapshot, grouped + summed
     ├── src/actions.rs         <- HKCU StartupApproved writes (+ roundtrip tests)
