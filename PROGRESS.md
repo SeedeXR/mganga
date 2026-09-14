@@ -96,6 +96,5 @@ Build output goes to /target at the root (workspace), not src-tauri/target.
 
 - Prefetch / SRUM usage enrichment via the broker (researched; links in memory notes)
 - Toggling scheduled tasks and services (read-only today, deliberately)
-- .lnk shortcut target resolution (folder items show no publisher)
 - Production bundling: broker as signed sidecar, installer (icons done 2026-06-07)
 - ~~Project is not a git repo yet~~: git repo initialized 2026-06-06

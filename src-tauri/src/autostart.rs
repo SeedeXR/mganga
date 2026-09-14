@@ -234,12 +234,22 @@ fn scan_startup_folders(out: &mut Vec<AutostartEntry>) {
                 .file_stem()
                 .map(|s| s.to_string_lossy().to_string())
                 .unwrap_or_else(|| file_name.clone());
+            // A shortcut becomes the command it launches, so the enrichment
+            // loop treats it like a Run entry. Anything else (a bare exe, a
+            // script) is its own command already.
+            let is_lnk = path
+                .extension()
+                .is_some_and(|x| x.eq_ignore_ascii_case("lnk"));
+            let command = is_lnk
+                .then(|| resolve_shortcut(&path))
+                .flatten()
+                .unwrap_or_else(|| path.to_string_lossy().to_string());
             out.push(AutostartEntry {
                 name,
                 source: label.to_string(),
                 source_detail: dir.to_string_lossy().to_string(),
-                command: path.to_string_lossy().to_string(),
-                publisher: None, // shortcuts carry no version info; resolve later if needed
+                command,
+                publisher: None, // filled from evidence in the scan() enrichment loop
                 enabled: approved_state(hive, APPROVED_FOLDER, &file_name),
                 toggle: (!crate::guard::is_protected_autostart(&file_name)).then(|| ToggleInfo {
                     hive: if hive == HKEY_CURRENT_USER { "HKCU" } else { "HKLM" }.to_string(),
@@ -416,6 +426,55 @@ fn extract_exe(command: &str) -> Option<String> {
     Some(path)
 }
 
+/// Issue #8: a Startup-folder item is a shortcut, and the shortcut is not the
+/// program. Ask the shell what it points at, so the target's version info,
+/// signer and location flow through the same evidence pipeline as a Run entry.
+/// Returns the target as a command line (quoted path plus arguments), or None
+/// when the shell cannot read the shortcut or it points at nothing.
+fn resolve_shortcut(lnk: &std::path::Path) -> Option<String> {
+    use windows::core::{Interface, HSTRING};
+    use windows::Win32::System::Com::{
+        CoCreateInstance, CoInitializeEx, CoUninitialize, IPersistFile, CLSCTX_INPROC_SERVER,
+        COINIT_APARTMENTTHREADED, STGM_READ,
+    };
+    use windows::Win32::UI::Shell::{IShellLinkW, ShellLink};
+
+    let wide_to_string = |buf: &[u16]| {
+        let end = buf.iter().position(|&c| c == 0).unwrap_or(buf.len());
+        String::from_utf16_lossy(&buf[..end])
+    };
+
+    unsafe {
+        // COM is per thread and the scan runs on a threadpool thread. A failure
+        // here means the thread already has COM in another mode; still usable,
+        // but then the uninit is not ours to call.
+        let init = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+        let read = || -> windows::core::Result<(String, String)> {
+            let link: IShellLinkW = CoCreateInstance(&ShellLink, None, CLSCTX_INPROC_SERVER)?;
+            let file: IPersistFile = link.cast()?;
+            file.Load(&HSTRING::from(lnk.to_string_lossy().as_ref()), STGM_READ)?;
+            let mut path = [0u16; 1024];
+            link.GetPath(&mut path, std::ptr::null_mut(), 0)?;
+            let mut args = [0u16; 1024];
+            link.GetArguments(&mut args)?;
+            Ok((wide_to_string(&path), wide_to_string(&args)))
+        };
+        let result = read();
+        if init.is_ok() {
+            CoUninitialize();
+        }
+        let (target, args) = result.ok()?;
+        if target.is_empty() {
+            return None; // e.g. a shortcut to a URL or a Store app
+        }
+        Some(if args.trim().is_empty() {
+            target
+        } else {
+            format!("\"{target}\" {}", args.trim())
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     /// Not an assertion, a probe: dumps the live scan to target/scan-dump.json
@@ -441,4 +500,35 @@ fn wants_signature(category: &Option<String>) -> bool {
             | Some("third-party-service")
             | Some("third-party-task")
     )
+}
+
+#[cfg(test)]
+mod shortcut_tests {
+    /// Makes a shortcut through the shell's own scripting object (WScript,
+    /// nothing shared with the code under test), then checks Mganga reads
+    /// back the same target and arguments.
+    #[test]
+    fn resolves_target_and_arguments() {
+        let lnk = concat!(env!("CARGO_MANIFEST_DIR"), "/../target/probe-shortcut.lnk");
+        let script = format!(
+            "$s = (New-Object -ComObject WScript.Shell).CreateShortcut('{lnk}'); \
+             $s.TargetPath = 'C:\\Windows\\notepad.exe'; $s.Arguments = '/a probe'; $s.Save()"
+        );
+        let status = std::process::Command::new("powershell")
+            .args(["-NoProfile", "-Command", &script])
+            .status()
+            .expect("powershell runs");
+        assert!(status.success(), "could not create the probe shortcut");
+
+        let resolved = super::resolve_shortcut(std::path::Path::new(lnk)).expect("resolves");
+        assert!(
+            resolved.eq_ignore_ascii_case("\"C:\\Windows\\notepad.exe\" /a probe"),
+            "got {resolved}"
+        );
+        // And the resolved command feeds the existing exe extractor.
+        assert!(super::extract_exe(&resolved)
+            .unwrap()
+            .eq_ignore_ascii_case("C:\\Windows\\notepad.exe"));
+        let _ = std::fs::remove_file(lnk);
+    }
 }
