@@ -252,7 +252,7 @@ pub fn judge_process(name: &str) -> Option<(String, String)> {
     Some((verdict.to_string(), reason.to_string()))
 }
 
-fn humanize_days(days: u32) -> String {
+pub(crate) fn humanize_days(days: u32) -> String {
     match days {
         0..=13 => format!("{days} days"),
         14..=59 => format!("{} weeks", days / 7),

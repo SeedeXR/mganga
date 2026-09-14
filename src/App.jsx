@@ -189,6 +189,19 @@ function StartupView({ initialFilter = "all" }) {
     setBusy(false);
   }
 
+  // Issue #2: hand off to the program's own uninstaller. Mganga only opens
+  // it; the receipt in History says exactly that.
+  async function uninstallEntry(entry) {
+    setActionError("");
+    setBusy(true);
+    try {
+      await invoke("launch_uninstaller", { key: entry.uninstall.key });
+    } catch (e) {
+      setActionError(`Could not open the uninstaller: ${String(e)}.`);
+    }
+    setBusy(false);
+  }
+
   if (error) {
     return <p className="text-glitch-red text-sm">{error}</p>;
   }
@@ -295,6 +308,19 @@ function StartupView({ initialFilter = "all" }) {
                         <div className="text-xs text-faint mt-0.5">
                           You last opened this {humanDays(e.last_opened_days)}
                           {e.open_count != null && `, ${e.open_count} times in total`}
+                        </div>
+                      )}
+                      {e.uninstall && (
+                        <div className="text-xs text-mute mt-1.5 flex items-center gap-2 flex-wrap">
+                          <span>{e.uninstall.line}</span>
+                          <button
+                            onClick={() => uninstallEntry(e)}
+                            disabled={busy}
+                            title={`Opens the uninstaller for ${e.uninstall.program}. Mganga removes nothing itself.`}
+                            className="rounded-md bg-paper/10 px-2 py-0.5 text-xs font-medium text-paper transition-colors hover:bg-paper/20 disabled:opacity-50"
+                          >
+                            Uninstall...
+                          </button>
                         </div>
                       )}
                     </td>
@@ -909,6 +935,7 @@ const ACTION_LABELS = {
   "resume-process": "Resumed",
   "kill-process": "Stopped",
   update: "Updated Mganga",
+  "launch-uninstaller": "Opened the uninstaller for",
 };
 
 function HistoryView() {
