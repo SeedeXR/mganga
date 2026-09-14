@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { invoke as tauriInvoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import "./App.css";
 import lockup from "./assets/brand/mganga-lockup-dark.svg";
 
@@ -109,6 +110,41 @@ const UNPLACED = new Set([
   "third-party-task",
 ]);
 
+// Issue #9, Layer 2: a web search for the exe and whoever made or signed it.
+// Never automatic: the click is the consent, nothing is stored, and the
+// search runs in the default browser, so Mganga itself still never talks to
+// the network. DuckDuckGo because it does not profile the searcher.
+function lookUp(e) {
+  const exe = (e.command.match(/[^\\/"]+\.exe/i) || [e.name])[0];
+  const who = e.publisher || e.evidence?.signer || "";
+  const q = [`"${exe}"`, who && `"${who}"`].filter(Boolean).join(" ");
+  openUrl(`https://duckduckgo.com/?q=${encodeURIComponent(q)}`).catch(() => {});
+}
+
+// Issue #10, Layer 3: one user's unknown becomes a known_apps.json rule for
+// everyone. Opens a GitHub issue draft with the facts filled in; the user
+// reads it before sending. The profile folder name is masked out.
+const TEACH_URL = "https://github.com/SeedeXR/mganga/issues/new";
+function teach(e) {
+  const mask = (s) => s.replace(/([A-Za-z]:\\Users\\)[^\\]+/gi, "$1<you>");
+  const ev = e.evidence || {};
+  const body = [
+    `**Name:** ${e.name}`,
+    `**Starts from:** ${e.source}`,
+    `**Command:** \`${mask(e.command)}\``,
+    `**Publisher:** ${e.publisher || "not stated"}`,
+    ev.description && `**Describes itself as:** ${ev.description}`,
+    ev.signer && `**Signed by:** ${ev.signer}${ev.signature_valid ? "" : " (not verified)"}`,
+    "",
+    "**What is it, and what should Mganga say about it?** (keep, your call, or safe to turn off, and why)",
+    "",
+  ]
+    .filter((line) => line !== undefined && line !== false)
+    .join("\n");
+  const url = `${TEACH_URL}?title=${encodeURIComponent(`Known app: ${e.name}`)}&body=${encodeURIComponent(body)}`;
+  openUrl(url).catch(() => {});
+}
+
 function EvidenceLines({ e }) {
   if (!UNPLACED.has(e.category)) return null;
   const ev = e.evidence || {};
@@ -124,6 +160,22 @@ function EvidenceLines({ e }) {
         <div className="text-xs text-faint">Not digitally signed</div>
       ) : null}
       {ev.location && <div className="text-xs text-faint">Located {ev.location}</div>}
+      <div className="flex gap-3 pt-0.5">
+        <button
+          onClick={() => lookUp(e)}
+          title="Searches the web for this program in your browser. Nothing is sent until you click, and Mganga keeps no record of it."
+          className="text-xs text-mute underline decoration-paper/25 underline-offset-2 transition-colors hover:text-paper"
+        >
+          Look this up
+        </button>
+        <button
+          onClick={() => teach(e)}
+          title="Opens a GitHub issue draft with this entry's details filled in, so Mganga can learn it for everyone. You read it before sending."
+          className="text-xs text-mute underline decoration-paper/25 underline-offset-2 transition-colors hover:text-paper"
+        >
+          Teach Mganga about this
+        </button>
+      </div>
     </div>
   );
 }
