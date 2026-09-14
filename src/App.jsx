@@ -1,8 +1,47 @@
 import { useEffect, useRef, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke as tauriInvoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import "./App.css";
 import lockup from "./assets/brand/mganga-lockup-dark.svg";
+
+// ---- Dev instrumentation ----
+// Every backend call is timed and kept here so the Dev tab can show what is
+// slow and what failed. Vite compiles import.meta.env.DEV to false in real
+// builds, so the branch and the tab drop out of what ships.
+const DEV = import.meta.env.DEV;
+const DEV_MAX_CALLS = 200;
+const devCalls = [];
+
+async function invoke(cmd, args) {
+  if (!DEV) return tauriInvoke(cmd, args);
+  const started = performance.now();
+  try {
+    const out = await tauriInvoke(cmd, args);
+    devCalls.push({ cmd, ms: performance.now() - started, ok: true, at: Date.now() });
+    return out;
+  } catch (e) {
+    devCalls.push({ cmd, ms: performance.now() - started, ok: false, err: String(e), at: Date.now() });
+    throw e;
+  } finally {
+    if (devCalls.length > DEV_MAX_CALLS) devCalls.splice(0, devCalls.length - DEV_MAX_CALLS);
+  }
+}
+
+// The autostart scan takes about five seconds: it shells out to schtasks and
+// reads Authenticode signatures. Re-running it on every visit to a tab is what
+// made the window stop responding. One cached result serves both screens that
+// need it, and any change to an entry throws it away.
+const SCAN_TTL_MS = 60_000;
+let scanCache = null; // { at, entries }
+
+async function scanAutostarts(force = false) {
+  if (!force && scanCache && Date.now() - scanCache.at < SCAN_TTL_MS) {
+    return scanCache.entries;
+  }
+  const entries = await invoke("scan_autostarts");
+  scanCache = { at: Date.now(), entries };
+  return entries;
+}
 
 // The Rust side returns short error codes. This is where they become human.
 // Per the UI guide: friendly, direct, say the why, no jargon.
@@ -140,10 +179,10 @@ function StartupView({ initialFilter = "all" }) {
   const [busy, setBusy] = useState(false);
   const [vFilter, setVFilter] = useState(initialFilter);
 
-  async function refresh() {
+  async function refresh(force = false) {
     setError("");
     try {
-      setEntries(await invoke("scan_autostarts"));
+      setEntries(await scanAutostarts(force));
     } catch (e) {
       setError(String(e));
     }
@@ -168,6 +207,7 @@ function StartupView({ initialFilter = "all" }) {
         prev.map((x) => (x === entry || (x.toggle === entry.toggle && x.name === entry.name) ? { ...x, enabled: on } : x))
       );
     flip(!entry.enabled);
+    scanCache = null; // the inventory just changed, do not serve a stale copy
     try {
       await invoke("set_autostart_enabled", args);
     } catch (e) {
@@ -556,6 +596,7 @@ const ACTION_HINTS = {
 
 function RightNowView() {
   const [snap, setSnap] = useState(null);
+  const [samples, setSamples] = useState([]);
   const [error, setError] = useState("");
   const [actionError, setActionError] = useState("");
   const [sortKey, setSortKey] = useState("cpu"); // "cpu" | "memory"
@@ -595,12 +636,20 @@ function RightNowView() {
   useEffect(() => {
     let alive = true;
     async function poll() {
-      if (hoveringRef.current) return; // frozen while the user aims
       try {
         const s = await invoke("get_processes");
-        // Re-check after the await: the mouse may have arrived while this
-        // request was in flight, and a late update would shift rows anyway.
-        if (alive && !hoveringRef.current) setSnap(s);
+        if (!alive) return;
+        // The graph keeps its own time even while the list is frozen, so a
+        // paused list never reads back as a minute of idleness.
+        // Ring buffer: 30 samples at 2s = the last minute.
+        setSamples((prev) => [
+          ...prev.slice(-29),
+          { cpu: s.cpu_total, mem: (s.mem_used / s.mem_total) * 100 },
+        ]);
+        // The list holds still while the mouse is over it so rows stop
+        // shifting under the cursor. Re-checked after the await, because the
+        // mouse may have arrived while this request was in flight.
+        if (!hoveringRef.current) setSnap(s);
       } catch (e) {
         if (alive) setError(String(e));
       }
@@ -722,6 +771,14 @@ function RightNowView() {
               →
             </button>
           )}
+        </div>
+      </div>
+
+      <div className="rounded-xl bg-paper/5 px-4 pt-3 pb-2">
+        <Sparkline samples={samples} />
+        <div className="text-xs text-faint mt-1">
+          the last minute · <span className="text-mute">processor</span> ·{" "}
+          <span className="text-faint">memory</span>
         </div>
       </div>
 
@@ -1041,175 +1098,147 @@ const BAR_COLORS = {
   protected: "bg-faint/60",
 };
 
-// The landing screen: Mganga's two questions answered at a glance, each card
-// a door into the full screen. Charts stay small; the sentences carry it.
+// Dev builds only: what the frontend asked the backend, and how long each call
+// took. This is the probe that found the five second autostart scan freezing
+// the window, so it stays.
+function DevView() {
+  const [calls, setCalls] = useState([]);
+
+  useEffect(() => {
+    const tick = () => setCalls(devCalls.slice(-60).reverse());
+    tick();
+    const t = setInterval(tick, 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  // Per command: how many, how slow at worst. The worst case is what the user
+  // actually feels, so it leads.
+  const byCmd = {};
+  for (const c of devCalls) {
+    const s = (byCmd[c.cmd] ||= { n: 0, worst: 0, total: 0, failed: 0 });
+    s.n += 1;
+    s.total += c.ms;
+    s.worst = Math.max(s.worst, c.ms);
+    if (!c.ok) s.failed += 1;
+  }
+  const rows = Object.entries(byCmd).sort((a, b) => b[1].worst - a[1].worst);
+  const slow = (ms) => (ms >= 1000 ? "text-glitch-red" : ms >= 250 ? "text-flame" : "text-mute");
+
+  return (
+    <div className="w-full max-w-4xl flex flex-col gap-4">
+      <section className="rounded-xl bg-paper/5 p-5 flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xs font-medium text-mute uppercase tracking-wide">
+            Backend calls, worst first
+          </h2>
+          <button
+            onClick={() => {
+              devCalls.length = 0;
+              setCalls([]);
+            }}
+            className="rounded-md bg-paper/10 hover:bg-paper/20 px-3 py-1 text-xs transition-colors"
+          >
+            Clear
+          </button>
+        </div>
+        {rows.length === 0 ? (
+          <p className="text-sm text-mute">Nothing called yet.</p>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-xs text-faint text-left">
+                <th className="font-medium pb-1">command</th>
+                <th className="font-medium pb-1 text-right">calls</th>
+                <th className="font-medium pb-1 text-right">avg</th>
+                <th className="font-medium pb-1 text-right">worst</th>
+                <th className="font-medium pb-1 text-right">failed</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(([cmd, s]) => (
+                <tr key={cmd} className="border-t border-paper/5">
+                  <td className="py-1 font-mono text-xs text-paper">{cmd}</td>
+                  <td className="py-1 text-right text-mute">{s.n}</td>
+                  <td className="py-1 text-right text-mute">{Math.round(s.total / s.n)} ms</td>
+                  <td className={`py-1 text-right ${slow(s.worst)}`}>{Math.round(s.worst)} ms</td>
+                  <td className={`py-1 text-right ${s.failed ? "text-glitch-red" : "text-faint"}`}>
+                    {s.failed}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        <p className="text-xs text-faint">
+          Anything past 250 ms is warm, past 1000 ms the window can feel stuck. A sync Tauri
+          command runs on the main thread, so slow ones need `#[tauri::command(async)]`.
+        </p>
+      </section>
+
+      <section className="rounded-xl bg-paper/5 p-5 flex flex-col gap-2">
+        <h2 className="text-xs font-medium text-mute uppercase tracking-wide">
+          Last {calls.length} calls, newest first
+        </h2>
+        <ul className="flex flex-col gap-0.5 font-mono text-xs max-h-80 overflow-y-auto">
+          {calls.map((c, i) => (
+            <li key={i} className="flex gap-3">
+              <span className="text-faint w-20 shrink-0">
+                {new Date(c.at).toLocaleTimeString()}
+              </span>
+              <span className={`w-16 shrink-0 text-right ${slow(c.ms)}`}>
+                {Math.round(c.ms)} ms
+              </span>
+              <span className={c.ok ? "text-paper" : "text-glitch-red"}>
+                {c.cmd}
+                {!c.ok && ` : ${c.err}`}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </section>
+    </div>
+  );
+}
+
+// Home is not a menu of previews any more. It answers the live question in
+// full (RightNowView below) and carries the startup question as a banner, so
+// there is one screen per question instead of a landing page in front of them.
 function HomeView({ onGo }) {
-  const [snap, setSnap] = useState(null);
-  const [samples, setSamples] = useState([]);
   const [entries, setEntries] = useState(null);
   const [scanError, setScanError] = useState("");
 
   useEffect(() => {
-    let alive = true;
-    async function poll() {
-      try {
-        const s = await invoke("get_processes");
-        if (!alive) return;
-        setSnap(s);
-        // Ring buffer: 30 samples at 2s = the last minute.
-        setSamples((prev) => [
-          ...prev.slice(-29),
-          { cpu: s.cpu_total, mem: (s.mem_used / s.mem_total) * 100 },
-        ]);
-      } catch {
-        // Home stays calm; the Running now screen reports polling errors.
-      }
-    }
-    poll();
-    const t = setInterval(poll, 2000);
-    return () => {
-      alive = false;
-      clearInterval(t);
-    };
+    scanAutostarts().then(setEntries, (e) => setScanError(String(e)));
   }, []);
 
-  useEffect(() => {
-    invoke("scan_autostarts").then(setEntries, (e) => setScanError(String(e)));
-  }, []);
-
-  const memPct = snap ? Math.round((snap.mem_used / snap.mem_total) * 100) : 0;
-  const cpuPct = snap ? Math.round(snap.cpu_total) : 0;
-  const diag = snap ? buildDiagnosis(snap) : null;
-  // When the machine is comfortable the diagnosis names nobody, so the card
-  // falls back to the busiest few in a calm tone.
-  const busiest = snap
-    ? [...snap.groups]
-        .sort((a, b) => b.cpu - a.cpu)
-        .slice(0, 3)
-        .map((g) => ({ name: g.name, label: `${Math.round(g.cpu)}%`, raw: g.cpu }))
-    : [];
-
-  const safeCount = entries
-    ? entries.filter((e) => e.verdict === "safe-to-disable" && e.enabled).length
-    : 0;
   const verdictCounts = entries
     ? Object.keys(VERDICTS)
         .map((id) => [id, entries.filter((e) => e.verdict === id).length])
         .filter(([, n]) => n > 0)
     : [];
-  // The named suggestions behind the "probably don't need to" claim: still
-  // launching at every boot and judged safe to turn off. Longest-unused first,
-  // because that is the most convincing evidence.
+  // The named entries behind the "probably don't need to" claim live on the
+  // startup screen, next to their switches. The banner only counts them.
   const suggestions = entries
-    ? entries
-        .filter((e) => e.enabled && e.verdict === "safe-to-disable")
-        .sort((a, b) => (b.last_opened_days ?? -1) - (a.last_opened_days ?? -1))
+    ? entries.filter((e) => e.enabled && e.verdict === "safe-to-disable")
     : [];
 
   return (
-    <div className="w-full max-w-4xl grid md:grid-cols-2 gap-4 items-start">
-      <section className="rounded-xl bg-paper/5 p-5 flex flex-col gap-4">
-        <h2 className="text-xs font-medium text-mute uppercase tracking-wide">Right now</h2>
-        {!snap ? (
-          <Loading size={56} label="Taking the first measurement..." />
-        ) : (
-          <>
-            <div>
-              <p className="text-sm text-paper">{diag.text}</p>
-              {diag.culprits.length > 0 ? (
-                <CulpritList culprits={diag.culprits} />
-              ) : (
-                busiest.length > 0 && (
-                  <>
-                    <p className="text-xs text-mute mt-3">Busiest right now:</p>
-                    <CulpritList culprits={busiest} tone="calm" />
-                  </>
-                )
-              )}
-            </div>
-            <div className="flex items-center gap-6">
-              <div className="flex items-center gap-2.5">
-                <span className={`rounded-lg bg-paper/10 p-2 ${cpuPct >= 60 ? "text-flame" : "text-mute"}`}>
-                  <CpuIcon />
-                </span>
-                <div>
-                  <div className="font-display text-xl font-bold">{cpuPct}%</div>
-                  <div className="text-xs text-mute">processor</div>
-                </div>
-              </div>
-              <div className="flex items-center gap-2.5">
-                <span className={`relative rounded-lg bg-paper/10 p-2 ${memPct >= 80 ? "text-flame" : "text-mute"}`}>
-                  <RamIcon />
-                  {memPct >= 80 && (
-                    <span className="mganga-flicker absolute -top-2.5 -right-1.5 text-sm" aria-hidden="true">
-                      🔥
-                    </span>
-                  )}
-                </span>
-                <div>
-                  <div className="font-display text-xl font-bold">{memPct}%</div>
-                  <div className="text-xs text-mute">memory</div>
-                </div>
-              </div>
-            </div>
-            <div>
-              <Sparkline samples={samples} />
-              <div className="text-xs text-faint mt-1">
-                the last minute · <span className="text-mute">processor</span> ·{" "}
-                <span className="text-faint">memory</span>
-              </div>
-            </div>
-          </>
-        )}
-        <button
-          onClick={() => onGo("rightnow")}
-          className="self-start rounded-lg bg-paper/10 hover:bg-paper/20 px-4 py-2 text-sm font-medium transition-colors"
-        >
-          See everything running →
-        </button>
-      </section>
-
-      <section className="rounded-xl bg-paper/5 p-5 flex flex-col gap-4">
-        <h2 className="text-xs font-medium text-mute uppercase tracking-wide">At startup</h2>
+    <div className="w-full max-w-4xl flex flex-col gap-4">
+      <section className="rounded-xl bg-paper/5 px-5 py-4 flex items-center justify-between gap-6">
         {scanError ? (
           <p className="text-sm text-glitch-red">{scanError}</p>
         ) : !entries ? (
-          <Loading size={56} label="Taking inventory of what starts with Windows..." />
+          <Loading size={40} label="Taking inventory of what starts with Windows..." />
         ) : (
           <>
-            <p className="text-sm text-paper">
-              {entries.length} things are set to start with Windows.{" "}
-              {safeCount > 0
-                ? `These ${safeCount} probably don't need to:`
-                : "Nothing jumps out as unnecessary."}
-            </p>
-            {suggestions.length > 0 && (
-              <ul className="flex flex-col gap-1.5">
-                {suggestions.slice(0, 5).map((e, i) => (
-                  <li
-                    key={`${e.source_detail}|${e.name}|${i}`}
-                    className="flex items-baseline justify-between gap-4 text-sm"
-                  >
-                    <span className="text-paper truncate">{e.name}</span>
-                    <span
-                      className="text-xs text-mute whitespace-nowrap cursor-help"
-                      title={e.reason}
-                    >
-                      {e.last_opened_days != null
-                        ? `last opened ${humanDays(e.last_opened_days)}`
-                        : "no recent use on record"}
-                    </span>
-                  </li>
-                ))}
-                {suggestions.length > 5 && (
-                  <li className="text-xs text-faint">
-                    and {suggestions.length - 5} more on the startup screen
-                  </li>
-                )}
-              </ul>
-            )}
-            <div>
-              <div className="flex h-2 rounded-full overflow-hidden bg-paper/5">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm text-paper">
+                {entries.length} things are set to start with Windows.{" "}
+                {suggestions.length > 0
+                  ? `${suggestions.length} probably don't need to.`
+                  : "Nothing jumps out as unnecessary."}
+              </p>
+              <div className="flex h-2 rounded-full overflow-hidden bg-paper/5 mt-2.5 max-w-md">
                 {verdictCounts.map(([id, n]) => (
                   <span
                     key={id}
@@ -1227,21 +1256,23 @@ function HomeView({ onGo }) {
                 ))}
               </div>
             </div>
+            <button
+              onClick={() =>
+                suggestions.length > 0 ? onGo("startup", "safe-to-disable") : onGo("startup")
+              }
+              className="shrink-0 rounded-lg bg-paper/10 hover:bg-paper/20 px-4 py-2 text-sm font-medium transition-colors"
+            >
+              {suggestions.length === 0
+                ? "Manage startup →"
+                : suggestions.length === 1
+                  ? "Review it →"
+                  : `Review these ${suggestions.length} →`}
+            </button>
           </>
         )}
-        <button
-          onClick={() =>
-            suggestions.length > 0 ? onGo("startup", "safe-to-disable") : onGo("startup")
-          }
-          className="self-start rounded-lg bg-paper/10 hover:bg-paper/20 px-4 py-2 text-sm font-medium transition-colors"
-        >
-          {suggestions.length === 0
-            ? "Manage startup →"
-            : suggestions.length === 1
-              ? "Review it →"
-              : `Review these ${suggestions.length} →`}
-        </button>
       </section>
+
+      <RightNowView />
     </div>
   );
 }
@@ -1387,10 +1418,10 @@ function App() {
         <nav className="flex gap-1 rounded-lg bg-paper/5 p-1">
           {[
             ["home", "Home"],
-            ["rightnow", "Running now"],
             ["startup", "Starts with Windows"],
             ["history", "History"],
             ["settings", "Settings"],
+            ...(DEV ? [["dev", "Dev"]] : []),
           ].map(([id, label]) => (
             <button
               key={id}
@@ -1421,10 +1452,10 @@ function App() {
       )}
 
       {tab === "home" && <HomeView onGo={go} />}
-      {tab === "rightnow" && <RightNowView />}
       {tab === "startup" && <StartupView initialFilter={startupFilter} />}
       {tab === "history" && <HistoryView />}
       {tab === "settings" && <SettingsView />}
+      {tab === "dev" && DEV && <DevView />}
     </main>
   );
 }

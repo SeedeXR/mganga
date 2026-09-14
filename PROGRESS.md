@@ -1,6 +1,8 @@
 # Mganga: build progress
 
-Last updated: 2026-06-07. All 8 bricks of `mganga-docs/docs/build-plan.md` are built.
+Last updated: 2026-09-14. All 8 bricks of `mganga-docs/docs/build-plan.md` are built.
+The connection unblocker (a ninth brick started in August) was scrapped on 2026-09-14 by
+owner decision; nothing of it ships. Work now moves issue by issue through PRs.
 The app runs with `npm run tauri dev` from the project root.
 
 > 2026-06-07: the brand pass (`mganga-brand/APPLY-BRAND.md` from Downloads) was applied.
@@ -52,10 +54,11 @@ Mganga Project/            <- open this folder in RustRover
 ├── Cargo.toml             <- workspace pointer (members = ["src-tauri"]) for IDE detection
 ├── mganga-docs/           <- the spec (read CLAUDE.md + docs/ before changing anything)
 ├── package.json, vite.config.js, index.html
-├── src/App.jsx            <- whole frontend (tabs: Home / Running now / Starts with Windows /
-│                             History; Home (default, added 2026-06-07) answers both questions
-│                             at a glance: diagnosis + 60s sparkline + verdict bar, hand-rolled
-│                             SVG, no chart lib. The old Plumbing dev tab was removed 2026-06-07.)
+├── src/App.jsx            <- whole frontend. Four tabs (2026-08-30): Home / Starts with
+│                             Windows / History / Settings, plus a Dev tab in dev builds only.
+│                             Home = a one-line startup banner over the full live view
+│                             (RightNowView), which owns the only get_processes poll and the
+│                             60s sparkline (hand-rolled SVG, no chart lib).
 ├── src/App.css            <- just the Tailwind import
 └── src-tauri/
     ├── tauri.conf.json        <- beforeDevCommand also builds the broker exe
