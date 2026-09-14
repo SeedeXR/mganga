@@ -141,19 +141,11 @@ pub fn launch(key: &str) -> Result<(&'static str, String), String> {
         .open_subkey(path)
         .map_err(|_| "that program is no longer installed".to_string())?;
     let name: String = k.get_value("DisplayName").unwrap_or_default();
-    let mut command: String = k.get_value("UninstallString").unwrap_or_default();
+    let command: String = k.get_value("UninstallString").unwrap_or_default();
     if command.trim().is_empty() {
         return Err("that program has no uninstaller registered".into());
     }
-    // MSI entries register the maintenance verb (/I); /X is uninstall, which
-    // is what Settings > Apps runs.
-    let lower = command.to_lowercase();
-    if let Some(i) = lower.find("msiexec.exe /i") {
-        if lower.len() == command.len() {
-            command.replace_range(i + 12..i + 14, "/X");
-        }
-    }
-    let (exe, args) = split_command(&command);
+    let (exe, args) = split_command(&msi_uninstall_verb(&command));
     if shell_open(&exe, &args) {
         return Ok(("uninstaller", name));
     }
@@ -183,6 +175,21 @@ fn shell_open(file: &str, params: &str) -> bool {
     };
     // A fake HINSTANCE; values above 32 mean it started.
     result.0 as isize > 32
+}
+
+/// MSI entries register the maintenance verb (`/I`); `/X` is uninstall, which
+/// is what Settings > Apps runs. Anything else passes through untouched.
+fn msi_uninstall_verb(command: &str) -> String {
+    let lower = command.to_lowercase();
+    match lower.find("msiexec.exe /i") {
+        // The slice is only safe when lowercasing kept every byte in place.
+        Some(i) if lower.len() == command.len() => {
+            let mut fixed = command.to_string();
+            fixed.replace_range(i + 12..i + 14, "/X");
+            fixed
+        }
+        _ => command.to_string(),
+    }
 }
 
 /// Split an UninstallString into the program and its arguments, tolerating
@@ -375,6 +382,13 @@ mod tests {
             split_command(r"C:\Program Files\Foo\uninstall.exe --quiet"),
             (r"C:\Program Files\Foo\uninstall.exe".to_string(), "--quiet".to_string())
         );
+
+        assert_eq!(
+            msi_uninstall_verb("MsiExec.exe /I{6F2E1A3B-0000-4000-8000-000000000001}"),
+            "MsiExec.exe /X{6F2E1A3B-0000-4000-8000-000000000001}"
+        );
+        assert_eq!(msi_uninstall_verb("MsiExec.exe /X{ABC}"), "MsiExec.exe /X{ABC}");
+        assert_eq!(msi_uninstall_verb(r"C:\Foo\unins.exe /I"), r"C:\Foo\unins.exe /I");
 
         assert_eq!(parse_install_date("19700101"), Some(0));
         assert_eq!(parse_install_date("20000301"), Some(11_017));
